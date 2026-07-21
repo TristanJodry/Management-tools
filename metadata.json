@@ -1,0 +1,6 @@
+{
+  "name": "Gestion de Projet",
+  "description": "Application de gestion de projet complète avec tableau de bord, indicateurs de performance (coût, délai, qualité) et outils de pilotage méthodologique.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
