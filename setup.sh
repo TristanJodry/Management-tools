@@ -110,7 +110,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=$APP_DIR
-ExecStart=$(which node) $APP_DIR/dist/server.cjs
+ExecStart=$(which node) $APP_DIR/dist/server.js
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production

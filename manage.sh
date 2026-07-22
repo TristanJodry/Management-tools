@@ -34,7 +34,7 @@ check_file_integrity() {
     echo -e "${CYAN}     VÉRIFICATION DE L'INTÉGRITÉ DES FICHIERS       ${NC}"
     echo -e "${CYAN}====================================================${NC}"
 
-    FILES_TO_CHECK=("package.json" "server.ts" "dist/server.cjs" "node_modules" "data/database.sqlite" "setup.sh" "manage.sh")
+    FILES_TO_CHECK=("package.json" "server.ts" "dist/server.js" "node_modules" "data/database.sqlite" "setup.sh" "manage.sh")
     MISSING_COUNT=0
 
     for file in "${FILES_TO_CHECK[@]}"; do
@@ -80,7 +80,7 @@ check_service_status() {
     fi
 
     # Utilisation des ressources
-    PID=$(pgrep -f "dist/server.cjs" | head -n 1 || true)
+    PID=$(pgrep -f "dist/server.js" | head -n 1 || true)
     if [ -n "$PID" ]; then
         MEM=$(ps -o rss= -p "$PID" 2>/dev/null | awk '{print int($1/1024) " MB"}' || echo "N/A")
         CPU=$(ps -o %cpu= -p "$PID" 2>/dev/null | awk '{print $1 "%"}' || echo "N/A")
@@ -266,8 +266,8 @@ restart_application() {
         echo -e "${GREEN}✓ Service ${SERVICE_NAME}.service redémarré avec succès.${NC}"
     else
         echo -e "${YELLOW}Le service systemd n'est pas actif. Démarrage du serveur en arrière-plan...${NC}"
-        pkill -f "dist/server.cjs" 2>/dev/null || true
-        nohup node "$APP_DIR/dist/server.cjs" > "$APP_DIR/server.log" 2>&1 &
+        pkill -f "dist/server.js" 2>/dev/null || true
+        nohup node "$APP_DIR/dist/server.js" > "$APP_DIR/server.log" 2>&1 &
         echo -e "${GREEN}✓ Serveur démarré en arrière-plan (logs: server.log).${NC}"
     fi
 }
