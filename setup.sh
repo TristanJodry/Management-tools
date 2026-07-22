@@ -97,7 +97,7 @@ npm run build
 rm -rf node_modules/.cache /tmp/npm-* 2>/dev/null || true
 
 # 8. Installation du service Systemd si sélectionné
-SERVICE_NAME="gouvernance"
+SERVICE_NAME="management-tools"
 if [[ "$INSTALL_SYSTEMD" =~ ^[OoYy]$ ]]; then
     echo -e "\n${BLUE}[6/7] Création du service systemd /etc/systemd/system/${SERVICE_NAME}.service...${NC}"
     
