@@ -15,7 +15,7 @@ import {
   Plus, 
   BookOpen, 
   X, 
-  Download, 
+  Download,
   HelpCircle, 
   Info,
   ExternalLink,
@@ -61,9 +61,36 @@ export default function App() {
   const [newLastName, setNewLastName] = useState('');
   const [newRole, setNewRole] = useState('');
 
-  // 1. Initial State Load with LocalStorage persistence
+  // 1. Initial State Load from Server API (with LocalStorage fallback)
   useEffect(() => {
-    // Load projects
+    fetch('/api/data')
+      .then((res) => {
+        if (!res.ok) throw new Error('API request failed');
+        return res.json();
+      })
+      .then((data) => {
+        if (data && Array.isArray(data.projects)) {
+          setProjects(data.projects);
+          localStorage.setItem('pm_app_projects_v2', JSON.stringify(data.projects));
+        } else {
+          loadFromLocalStorageProjects();
+        }
+
+        if (data && Array.isArray(data.globalTeam)) {
+          setGlobalTeam(data.globalTeam);
+          localStorage.setItem('pm_app_global_team', JSON.stringify(data.globalTeam));
+        } else {
+          loadFromLocalStorageTeam();
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not fetch data from server, falling back to localStorage:', err);
+        loadFromLocalStorageProjects();
+        loadFromLocalStorageTeam();
+      });
+  }, []);
+
+  const loadFromLocalStorageProjects = () => {
     const savedProjects = localStorage.getItem('pm_app_projects_v2');
     if (savedProjects) {
       try {
@@ -75,8 +102,9 @@ export default function App() {
       setProjects(INITIAL_PROJECTS);
       localStorage.setItem('pm_app_projects_v2', JSON.stringify(INITIAL_PROJECTS));
     }
+  };
 
-    // Load team members
+  const loadFromLocalStorageTeam = () => {
     const savedTeam = localStorage.getItem('pm_app_global_team');
     if (savedTeam) {
       try {
@@ -87,17 +115,29 @@ export default function App() {
     } else {
       setGlobalTeam([]);
     }
-  }, []);
+  };
 
-  // Helper to save state
+  // Helper to save state on both server and client
   const saveProjects = (updatedProjects: Project[]) => {
     setProjects(updatedProjects);
     localStorage.setItem('pm_app_projects_v2', JSON.stringify(updatedProjects));
+
+    fetch('/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projects: updatedProjects }),
+    }).catch((err) => console.error('Failed to sync projects to server:', err));
   };
 
   const saveGlobalTeam = (updatedTeam: TeamMember[]) => {
     setGlobalTeam(updatedTeam);
     localStorage.setItem('pm_app_global_team', JSON.stringify(updatedTeam));
+
+    fetch('/api/team', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ globalTeam: updatedTeam }),
+    }).catch((err) => console.error('Failed to sync team to server:', err));
   };
 
   // Add team member

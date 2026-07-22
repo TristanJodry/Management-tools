@@ -112,6 +112,7 @@ export default function ProjectModal({ isOpen, onClose, onSave, editingProject, 
     if (!name.trim()) return;
 
     const savedProject: Project = {
+      ...(editingProject || {}),
       id: editingProject?.id || `proj-${Date.now()}`,
       name,
       description,
