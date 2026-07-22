@@ -9,7 +9,99 @@
 }
 
 @layer base {
-  html, body {
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+    background-color: #020617; /* Slate 950 */
+    color: #f8fafc; /* Slate 50 */
+  }
+
+  body {
     font-family: var(--font-sans);
+  }
+
+  /* Universal Input, Textarea, Select styling for high contrast & readability in Dark Mode */
+  .dark input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+  .dark textarea,
+  .dark select {
+    background-color: #1e293b !important; /* Slate 800 */
+    color: #f8fafc !important; /* Slate 50 */
+    border-color: #334155 !important; /* Slate 700 */
+  }
+
+  .dark input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):focus,
+  .dark textarea:focus,
+  .dark select:focus {
+    background-color: #0f172a !important; /* Slate 900 */
+    color: #ffffff !important;
+    border-color: #6366f1 !important; /* Indigo 500 */
+  }
+
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: #94a3b8 !important; /* Slate 400 */
+  }
+
+  .dark select option {
+    background-color: #1e293b !important;
+    color: #f8fafc !important;
+  }
+
+  /* Support radio & checkbox in dark mode */
+  .dark input[type="checkbox"],
+  .dark input[type="radio"] {
+    background-color: #1e293b !important;
+    border-color: #475569 !important;
+    accent-color: #6366f1;
+  }
+
+  /* Universal card & panel dark mode overrides for components */
+  .dark .bg-white {
+    background-color: #0f172a !important; /* Slate 900 */
+    color: #f8fafc;
+  }
+
+  .dark .bg-slate-50,
+  .dark .bg-slate-50\/50,
+  .dark .bg-slate-100 {
+    background-color: #1e293b !important; /* Slate 800 */
+    color: #f8fafc;
+  }
+
+  .dark .text-slate-900,
+  .dark .text-slate-800,
+  .dark .text-slate-700 {
+    color: #f1f5f9 !important; /* Slate 100 */
+  }
+
+  .dark .text-slate-600,
+  .dark .text-slate-500 {
+    color: #cbd5e1 !important; /* Slate 300 */
+  }
+
+  .dark .text-slate-400 {
+    color: #94a3b8 !important; /* Slate 400 */
+  }
+
+  .dark .border-slate-200,
+  .dark .border-slate-200\/80,
+  .dark .border-slate-300,
+  .dark .border-slate-100 {
+    border-color: #334155 !important; /* Slate 700 */
+  }
+
+  .dark .divide-slate-200,
+  .dark .divide-slate-100,
+  .dark .divide-slate-150 {
+    border-color: #334155 !important;
+  }
+
+  .dark .hover\:bg-slate-50:hover,
+  .dark .hover\:bg-slate-50\/70:hover,
+  .dark .hover\:bg-slate-100:hover {
+    background-color: #334155 !important; /* Slate 700 */
   }
 }
