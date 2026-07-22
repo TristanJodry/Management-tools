@@ -9,4 +9,6 @@ coverage/
 
 # Database persistence files
 data/
+backups/
 db.json
+*.sqlite
