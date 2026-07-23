@@ -7,13 +7,15 @@ interface LoginModalProps {
   onClose: () => void;
   onLoginSuccess: (user: UserAccount) => void;
   adminUsername: string;
+  users?: UserAccount[];
 }
 
 export default function LoginModal({
   isOpen,
   onClose,
   onLoginSuccess,
-  adminUsername
+  adminUsername,
+  users = []
 }: LoginModalProps) {
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
@@ -27,28 +29,47 @@ export default function LoginModal({
     setErrorMsg(null);
     setIsLoading(true);
 
+    const uInput = usernameInput.trim();
+    const pInput = passwordInput.trim();
+
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: usernameInput.trim(),
-          password: passwordInput.trim()
+          username: uInput,
+          password: pInput
         })
       });
 
       const data = await res.json();
-      if (!res.ok || !data.success) {
-        setErrorMsg(data.error || 'Identifiant ou mot de passe incorrect.');
+      if (res.ok && data.success && data.user) {
+        onLoginSuccess(data.user);
+        setUsernameInput('');
+        setPasswordInput('');
         setIsLoading(false);
+        onClose();
         return;
       }
 
-      onLoginSuccess(data.user);
+      setErrorMsg(data.error || 'Identifiant ou mot de passe incorrect.');
       setIsLoading(false);
-      onClose();
     } catch (err) {
-      setErrorMsg('Erreur de connexion au serveur.');
+      // Fallback local check
+      const foundUser = users.find(
+        (u) => u.username?.toLowerCase() === uInput.toLowerCase() && u.password === pInput
+      );
+
+      if (foundUser) {
+        onLoginSuccess(foundUser);
+        setUsernameInput('');
+        setPasswordInput('');
+        setIsLoading(false);
+        onClose();
+        return;
+      }
+
+      setErrorMsg('Identifiant ou mot de passe incorrect (ou serveur indisponible).');
       setIsLoading(false);
     }
   };

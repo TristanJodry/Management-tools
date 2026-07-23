@@ -14,6 +14,7 @@ import ProjectModal from './components/ProjectModal';
 import ProjectDashboard from './components/ProjectDashboard';
 import UserManagementModal from './components/UserManagementModal';
 import LoginModal from './components/LoginModal';
+import UserProfileModal from './components/UserProfileModal';
 import { 
   FolderKanban, 
   Plus, 
@@ -33,7 +34,9 @@ import {
   Lock,
   LogOut,
   UserCheck,
-  Key
+  Key,
+  LogIn,
+  ChevronDown
 } from 'lucide-react';
 
 export default function App() {
@@ -50,23 +53,15 @@ export default function App() {
       try {
         return JSON.parse(saved);
       } catch {
-        // Fallback to Root Admin
+        return null;
       }
     }
-    return {
-      id: ADMIN_CONFIG.id,
-      username: ADMIN_CONFIG.username,
-      firstName: ADMIN_CONFIG.firstName,
-      lastName: ADMIN_CONFIG.lastName,
-      email: ADMIN_CONFIG.email,
-      role: ADMIN_CONFIG.role,
-      groupIds: [],
-      isAdmin: true
-    };
+    return null;
   });
 
   const [isUserMgmtModalOpen, setIsUserMgmtModalOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   
   // Dark mode state
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -228,6 +223,26 @@ export default function App() {
     }).catch((err) => console.error('Failed to sync users to server:', err));
   };
 
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('pm_app_current_user');
+  };
+
+  const handleUpdateUserPassword = (userId: string, newPass: string) => {
+    if (userId === ADMIN_CONFIG.id || currentUser?.isAdmin) {
+      ADMIN_CONFIG.password = newPass;
+    }
+
+    const updatedUsers = users.map((u) => (u.id === userId ? { ...u, password: newPass } : u));
+    saveUsers(updatedUsers);
+
+    if (currentUser && currentUser.id === userId) {
+      const updatedCurr = { ...currentUser, password: newPass };
+      setCurrentUser(updatedCurr);
+      localStorage.setItem('pm_app_current_user', JSON.stringify(updatedCurr));
+    }
+  };
+
   // Helper to save state on both server and client
   const saveProjects = (updatedProjects: Project[]) => {
     setProjects(updatedProjects);
@@ -338,51 +353,45 @@ export default function App() {
           {/* Quick Access Actions & Auth Profile */}
           <div className="flex flex-wrap items-center justify-center md:justify-end gap-2.5">
             
-            {/* User Account / Auth Badge */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/90 rounded-xl border border-slate-700/80 text-xs">
-              <div className={`p-1 rounded-lg ${currentUser?.isAdmin ? 'bg-amber-500/20 text-amber-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
-                {currentUser?.isAdmin ? <Shield className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
-              </div>
-              <div>
-                <div className="flex items-center gap-1">
-                  <span className="font-bold text-slate-100">
-                    {currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'Invité'}
-                  </span>
-                  {currentUser?.isAdmin && (
-                    <span className="text-[9px] font-bold uppercase bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded border border-amber-500/30">
-                      ADMIN
-                    </span>
-                  )}
-                </div>
-                <p className="text-[10px] text-slate-400">
-                  {currentUser?.isAdmin
-                    ? 'Accès Root Administrateur'
-                    : currentUser?.groupIds && currentUser.groupIds.length > 0
-                    ? `Groupes : ${userGroups.filter(g => currentUser.groupIds.includes(g.id)).map(g => g.name).join(', ')}`
-                    : 'Abonné (Lecture Seule)'}
-                </p>
-              </div>
-
-              {currentUser?.isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => setIsUserMgmtModalOpen(true)}
-                  className="ml-1 p-1 text-amber-400 hover:text-amber-200 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-                  title="Gérer les droits et utilisateurs"
-                >
-                  <Key className="w-3.5 h-3.5" />
-                </button>
-              )}
-
+            {/* User Account / Auth Area */}
+            {!currentUser ? (
               <button
                 type="button"
                 onClick={() => setIsLoginModalOpen(true)}
-                className="ml-1 px-2 py-1 text-[10px] font-bold text-slate-300 hover:text-white bg-slate-700/80 hover:bg-slate-700 rounded-lg border border-slate-600/80 transition-colors cursor-pointer"
-                title="Changer de compte ou se connecter"
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-sm transition-all cursor-pointer"
               >
+                <LogIn className="w-4 h-4" />
                 Connexion
               </button>
-            </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsProfileModalOpen(true)}
+                className="flex items-center gap-2.5 px-3 py-1.5 bg-slate-800/90 hover:bg-slate-750 rounded-xl border border-slate-700/80 transition-all cursor-pointer text-xs group"
+                title="Gérer mon profil, mot de passe & déconnexion"
+              >
+                <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-xs ring-1 ring-indigo-400/30 group-hover:bg-indigo-500 transition-colors">
+                  {currentUser.firstName ? currentUser.firstName.charAt(0).toUpperCase() : 'U'}
+                  {currentUser.lastName ? currentUser.lastName.charAt(0).toUpperCase() : ''}
+                </div>
+                <div className="text-left">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-slate-100 group-hover:text-indigo-300 transition-colors">
+                      {currentUser.firstName} {currentUser.lastName}
+                    </span>
+                    {currentUser.isAdmin && (
+                      <span className="text-[9px] font-bold uppercase bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded border border-amber-500/30">
+                        ADMIN
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    {currentUser.isAdmin ? 'Administrateur' : currentUser.role || 'Collaborateur'}
+                  </p>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-colors ml-1" />
+              </button>
+            )}
 
             {/* Dark mode toggle */}
             <button
@@ -747,10 +756,24 @@ export default function App() {
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
         adminUsername={ADMIN_CONFIG.username}
+        users={users}
         onLoginSuccess={(user) => {
           setCurrentUser(user);
         }}
       />
+
+      {/* USER PROFILE & PASSWORD MANAGEMENT MODAL */}
+      {currentUser && (
+        <UserProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+          currentUser={currentUser}
+          userGroups={userGroups}
+          onLogout={handleLogout}
+          onOpenUserMgmt={() => setIsUserMgmtModalOpen(true)}
+          onUpdateUserPassword={handleUpdateUserPassword}
+        />
+      )}
 
     </div>
   );

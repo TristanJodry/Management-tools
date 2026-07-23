@@ -490,8 +490,14 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(400).json({ error: 'Identifiant et mot de passe requis' });
   }
 
+  const trimmedUsername = String(username).trim();
+  const trimmedPassword = String(password).trim();
+
   // 1. Check Root Admin credentials from ADMIN_CONFIG
-  if (username === ADMIN_CONFIG.username && password === ADMIN_CONFIG.password) {
+  if (
+    trimmedUsername.toLowerCase() === ADMIN_CONFIG.username.toLowerCase() &&
+    trimmedPassword === ADMIN_CONFIG.password
+  ) {
     const adminUser = {
       id: ADMIN_CONFIG.id,
       username: ADMIN_CONFIG.username,
@@ -507,7 +513,9 @@ app.post('/api/auth/login', (req, res) => {
 
   // 2. Check stored users
   const users = getAllUsers();
-  const user = users.find((u) => u.username?.toLowerCase() === username.toLowerCase() && u.password === password);
+  const user = users.find(
+    (u) => u.username?.toLowerCase() === trimmedUsername.toLowerCase() && u.password === trimmedPassword
+  );
 
   if (user) {
     const { password: _, ...userWithoutPassword } = user;
@@ -515,6 +523,38 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   return res.status(401).json({ error: 'Identifiant ou mot de passe incorrect' });
+});
+
+app.post('/api/auth/change-password', (req, res) => {
+  const { userId, oldPassword, newPassword } = req.body;
+  if (!userId || !newPassword) {
+    return res.status(400).json({ error: 'Identifiant et nouveau mot de passe requis' });
+  }
+
+  // Root Admin password update
+  if (userId === ADMIN_CONFIG.id) {
+    if (oldPassword && oldPassword.trim() !== ADMIN_CONFIG.password) {
+      return res.status(400).json({ error: 'Ancien mot de passe administrateur incorrect' });
+    }
+    ADMIN_CONFIG.password = String(newPassword).trim();
+    return res.json({ success: true, message: 'Mot de passe administrateur mis à jour' });
+  }
+
+  // Regular user password update
+  const users = getAllUsers();
+  const userIndex = users.findIndex((u) => u.id === userId);
+  if (userIndex === -1) {
+    return res.status(404).json({ error: 'Utilisateur non trouvé' });
+  }
+
+  if (oldPassword && users[userIndex].password && users[userIndex].password !== String(oldPassword).trim()) {
+    return res.status(400).json({ error: 'Ancien mot de passe incorrect' });
+  }
+
+  users[userIndex].password = String(newPassword).trim();
+  saveUsersToDb(users);
+
+  return res.json({ success: true, message: 'Mot de passe mis à jour avec succès' });
 });
 
 app.get('/api/health', (_req, res) => {
