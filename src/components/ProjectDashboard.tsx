@@ -799,10 +799,10 @@ export default function ProjectDashboard({
   };
 
   // Calculations for KPI Cards
-  const dynamicBudget = budgetGroups.reduce((sum, g) => sum + g.expenses.reduce((s, e) => s + e.planned, 0), 0);
-  const dynamicSpent = budgetGroups.reduce((sum, g) => sum + g.expenses.reduce((s, e) => s + e.spent, 0), 0);
-  const isOverBudget = dynamicSpent > dynamicBudget && dynamicBudget > 0;
-  const budgetRatio = dynamicBudget > 0 ? dynamicSpent / dynamicBudget : 0;
+  const initialBudget = project.budget || 0;
+  const dynamicSpent = budgetGroups.reduce((sum, g) => sum + (g.expenses || []).reduce((s, e) => s + (e.spent || 0), 0), 0);
+  const isOverBudget = dynamicSpent > initialBudget && initialBudget > 0;
+  const budgetRatio = initialBudget > 0 ? dynamicSpent / initialBudget : 0;
 
   const totalGanttItems = ganttPhases.reduce((sum, p) => sum + p.items.length, 0);
   const completedGanttItems = ganttPhases.reduce(
@@ -924,7 +924,7 @@ export default function ProjectDashboard({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <span className="text-[10px] text-slate-400 font-bold uppercase block">Budget Prévu</span>
-              <span className="text-base font-bold font-mono text-slate-800">{formatEuro(dynamicBudget)}</span>
+              <span className="text-base font-bold font-mono text-slate-800">{formatEuro(initialBudget)}</span>
             </div>
             <div>
               <span className="text-[10px] text-slate-400 font-bold uppercase block">Consommé</span>
@@ -1753,6 +1753,26 @@ export default function ProjectDashboard({
                 <div>
                   <h3 className="text-sm font-bold text-slate-800">Gestion et Groupes de Budget</h3>
                   <p className="text-xs text-slate-500">Ventilez les dépenses prévues et réelles par poste de coût et modifiez les lignes.</p>
+                </div>
+              </div>
+
+              {/* Summary Banner */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Budget Initial Allocé (Création)</span>
+                  <span className="text-lg font-bold font-mono text-slate-900">{formatEuro(initialBudget)}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Budget Consommé (Dépenses)</span>
+                  <span className={`text-lg font-bold font-mono ${isOverBudget ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    {formatEuro(dynamicSpent)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Solde Restant</span>
+                  <span className={`text-lg font-bold font-mono ${initialBudget - dynamicSpent < 0 ? 'text-rose-600' : 'text-indigo-600'}`}>
+                    {formatEuro(initialBudget - dynamicSpent)}
+                  </span>
                 </div>
               </div>
 

@@ -1,16 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { GanttPhase, GanttItem, TeamMember } from '../types';
-import { Calendar, ChevronRight, ChevronDown, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { Calendar, ChevronRight, ChevronDown, CheckCircle2, Clock } from 'lucide-react';
 
 interface GanttChartVisualizerProps {
-  phases: GanttPhase[];
+  phases?: GanttPhase[];
   teamMembers?: TeamMember[];
   onUpdateProgress?: (phaseId: string, itemId: string, newProgress: number) => void;
   onToggleMilestone?: (phaseId: string, itemId: string, completed: boolean) => void;
 }
 
 export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
-  phases,
+  phases = [],
   teamMembers = [],
   onUpdateProgress,
   onToggleMilestone,
@@ -18,38 +18,44 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
   const [collapsedPhases, setCollapsedPhases] = useState<Record<string, boolean>>({});
   const [timeScale, setTimeScale] = useState<'weeks' | 'months'>('weeks');
 
+  const safePhases = useMemo(() => Array.isArray(phases) ? phases : [], [phases]);
+
   const togglePhase = (phaseId: string) => {
     setCollapsedPhases(prev => ({ ...prev, [phaseId]: !prev[phaseId] }));
   };
 
-  // Collect all items across phases
+  // Collect all valid items across phases
   const allItems = useMemo(() => {
     const list: { phaseId: string; phaseName: string; item: GanttItem }[] = [];
-    phases.forEach(p => {
-      p.items.forEach(it => {
-        list.push({ phaseId: p.id, phaseName: p.name, item: it });
-      });
+    safePhases.forEach(p => {
+      if (p && Array.isArray(p.items)) {
+        p.items.forEach(it => {
+          if (it) {
+            list.push({ phaseId: p.id || '', phaseName: p.name || 'Phase', item: it });
+          }
+        });
+      }
     });
     return list;
-  }, [phases]);
+  }, [safePhases]);
 
-  // Determine overall start and end dates
-  const { minDate, maxDate, totalDays, timeColumns } = useMemo(() => {
+  // Determine overall start and end dates for timeline range
+  const { minDate, totalDays, timeColumns } = useMemo(() => {
     let min = new Date();
     let max = new Date();
-    max.setDate(max.getDate() + 60); // default 2 months ahead
+    max.setDate(max.getDate() + 60); // default 2 months range
 
     let validDatesFound = false;
 
     allItems.forEach(({ item }) => {
-      if (item.startDate) {
+      if (item && item.startDate) {
         const dStart = new Date(item.startDate);
         if (!isNaN(dStart.getTime())) {
           if (!validDatesFound || dStart < min) min = dStart;
           validDatesFound = true;
         }
       }
-      if (item.endDate) {
+      if (item && item.endDate) {
         const dEnd = new Date(item.endDate);
         if (!isNaN(dEnd.getTime())) {
           if (!validDatesFound || dEnd > max) max = dEnd;
@@ -58,11 +64,10 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
       }
     });
 
-    // Ensure range is at least 30 days
     const minTime = min.getTime();
-    let maxTime = max.getTime();
+    const maxTime = max.getTime();
     const diffDays = Math.max(30, Math.ceil((maxTime - minTime) / (1000 * 60 * 60 * 24)) + 7);
-    
+
     // Normalize min to start of day
     const startOfRange = new Date(minTime);
     startOfRange.setHours(0, 0, 0, 0);
@@ -75,22 +80,20 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
 
     if (timeScale === 'months') {
       while (curr < endOfRange) {
-        const year = curr.getFullYear();
-        const month = curr.getMonth();
         const monthName = curr.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' });
-        const nextMonth = new Date(year, month + 1, 1);
-        const daysInMonth = Math.round((nextMonth.getTime() - curr.getTime()) / (1000 * 60 * 60 * 24));
         cols.push({
           label: monthName,
           date: new Date(curr),
-          daysInCol: daysInMonth
+          daysInCol: 30
         });
         curr.setMonth(curr.getMonth() + 1);
         curr.setDate(1);
       }
     } else {
       // Weekly view
-      while (curr < endOfRange) {
+      let safetyCounter = 0;
+      while (curr < endOfRange && safetyCounter < 100) {
+        safetyCounter++;
         const weekLabel = `Sem ${getWeekNumber(curr)} (${curr.getDate()}/${curr.getMonth() + 1})`;
         cols.push({
           label: weekLabel,
@@ -111,25 +114,34 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
     };
   }, [allItems, timeScale]);
 
-  // Helper to compute left % and width % for a given item
-  const getItemPosition = (startDateStr: string, endDateStr: string) => {
-    const sDate = startDateStr ? new Date(startDateStr) : new Date(minDate);
-    const eDate = endDateStr ? new Date(endDateStr) : new Date(sDate.getTime() + 24 * 60 * 60 * 1000);
+  // Helper to compute left % and width % for a given item safely
+  const getItemPosition = (startDateStr?: string, endDateStr?: string) => {
+    const baseMin = minDate ? minDate.getTime() : Date.now();
+    const sDate = startDateStr ? new Date(startDateStr) : new Date(baseMin);
+    let eDate = endDateStr ? new Date(endDateStr) : new Date(sDate.getTime() + 24 * 60 * 60 * 1000);
 
-    const startDiffDays = (sDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24);
+    if (isNaN(sDate.getTime())) sDate.setTime(baseMin);
+    if (isNaN(eDate.getTime())) eDate.setTime(sDate.getTime() + 24 * 60 * 60 * 1000);
+
+    const startDiffDays = (sDate.getTime() - baseMin) / (1000 * 60 * 60 * 24);
     const durationDays = Math.max(1, (eDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24));
 
-    const leftPct = Math.max(0, Math.min(100, (startDiffDays / totalDays) * 100));
-    const widthPct = Math.max(1.5, Math.min(100 - leftPct, (durationDays / totalDays) * 100));
+    const safeTotal = totalDays > 0 ? totalDays : 30;
 
-    return { leftPct, widthPct };
+    const leftPct = Math.max(0, Math.min(100, (startDiffDays / safeTotal) * 100));
+    const widthPct = Math.max(1.5, Math.min(100 - leftPct, (durationDays / safeTotal) * 100));
+
+    return {
+      leftPct: isNaN(leftPct) ? 0 : leftPct,
+      widthPct: isNaN(widthPct) ? 5 : widthPct
+    };
   };
 
   // Stats
-  const totalTasks = allItems.filter(i => i.item.type === 'task').length;
-  const completedTasks = allItems.filter(i => i.item.type === 'task' && i.item.progress === 100).length;
-  const totalMilestones = allItems.filter(i => i.item.type === 'milestone').length;
-  const doneMilestones = allItems.filter(i => i.item.type === 'milestone' && i.item.completed).length;
+  const totalTasks = allItems.filter(i => i.item?.type === 'task').length;
+  const completedTasks = allItems.filter(i => i.item?.type === 'task' && i.item?.progress === 100).length;
+  const totalMilestones = allItems.filter(i => i.item?.type === 'milestone').length;
+  const doneMilestones = allItems.filter(i => i.item?.type === 'milestone' && i.item?.completed).length;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden space-y-4 p-4">
@@ -150,6 +162,7 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
           {/* Timeline scale selector */}
           <div className="bg-slate-100 p-0.5 rounded-lg flex text-xs font-bold">
             <button
+              type="button"
               onClick={() => setTimeScale('weeks')}
               className={`px-3 py-1 rounded-md transition-all ${
                 timeScale === 'weeks' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
@@ -158,6 +171,7 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
               Semaines
             </button>
             <button
+              type="button"
               onClick={() => setTimeScale('months')}
               className={`px-3 py-1 rounded-md transition-all ${
                 timeScale === 'months' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
@@ -196,17 +210,17 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
           <span className="text-amber-500 font-bold shrink-0">◆</span>
           <div>
             <span className="text-[10px] text-slate-500 block uppercase font-semibold">Légende Jalon</span>
-            <span className="text-[11px] text-slate-700 font-medium">◆ Losange doré</span>
+            <span className="text-[11px] text-slate-700 font-medium">◆ Losange d'échéance</span>
           </div>
         </div>
       </div>
 
       {/* Main Gantt View Table & Timeline Canvas */}
-      {phases.length === 0 || allItems.length === 0 ? (
+      {safePhases.length === 0 || allItems.length === 0 ? (
         <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-200">
           <Calendar className="w-8 h-8 text-slate-300 mx-auto mb-2" />
           <p className="text-xs font-semibold text-slate-600">Aucune phase ni tâche définie dans le planning.</p>
-          <p className="text-[11px] text-slate-400 mt-1">Ajoutez des phases et des éléments ci-dessous pour générer le Gantt visuel.</p>
+          <p className="text-[11px] text-slate-400 mt-1">Ajoutez des phases et des éléments dans la liste ci-dessous pour alimenter le chronogramme.</p>
         </div>
       ) : (
         <div className="border border-slate-200 rounded-xl overflow-x-auto bg-white shadow-2xs">
@@ -214,13 +228,13 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
             
             {/* Timeline Header Row */}
             <div className="flex border-b border-slate-200 bg-slate-100/80 font-bold text-[11px] text-slate-700">
-              {/* Left Column Header (Task Names) */}
+              {/* Left Column Header */}
               <div className="w-72 p-3 border-r border-slate-200 shrink-0 flex items-center justify-between">
                 <span>Phase / Élément du Projet</span>
                 <span className="text-[10px] text-slate-400 font-normal">Avancement</span>
               </div>
 
-              {/* Right Columns Header (Time periods) */}
+              {/* Right Columns Header */}
               <div className="flex-1 flex overflow-hidden">
                 {timeColumns.map((col, idx) => (
                   <div
@@ -235,14 +249,16 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
 
             {/* Gantt Body: Phase Groups & Tasks */}
             <div className="divide-y divide-slate-100 text-xs">
-              {phases.map((phase) => {
+              {safePhases.map((phase) => {
+                if (!phase) return null;
                 const isCollapsed = !!collapsedPhases[phase.id];
-                const phaseProgress = phase.items.length > 0
-                  ? Math.round(phase.items.reduce((acc, it) => acc + (it.type === 'milestone' ? (it.completed ? 100 : 0) : it.progress), 0) / phase.items.length)
+                const pItems = Array.isArray(phase.items) ? phase.items : [];
+                const phaseProgress = pItems.length > 0
+                  ? Math.round(pItems.reduce((acc, it) => acc + (it?.type === 'milestone' ? (it?.completed ? 100 : 0) : (it?.progress || 0)), 0) / pItems.length)
                   : 0;
 
                 return (
-                  <React.Fragment key={phase.id}>
+                  <React.Fragment key={phase.id || Math.random()}>
                     {/* Phase Header Row */}
                     <div className="flex bg-slate-50/90 font-bold text-slate-800 hover:bg-slate-100/80 transition-colors">
                       <div
@@ -271,15 +287,16 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
                     </div>
 
                     {/* Phase Items Rows */}
-                    {!isCollapsed && phase.items.map((item) => {
+                    {!isCollapsed && pItems.map((item) => {
+                      if (!item) return null;
                       const pos = getItemPosition(item.startDate, item.endDate);
                       const assignedNames = (item.assignedTo || [])
-                        .map(id => teamMembers.find(tm => tm.id === id)?.firstName)
+                        .map(id => (teamMembers || []).find(tm => tm && tm.id === id)?.firstName)
                         .filter(Boolean)
                         .join(', ');
 
                       return (
-                        <div key={item.id} className="flex hover:bg-indigo-50/30 transition-colors group">
+                        <div key={item.id || Math.random()} className="flex hover:bg-indigo-50/30 transition-colors group">
                           {/* Left Column: Item Name & Controls */}
                           <div className="w-72 p-2 border-r border-slate-200 shrink-0 flex items-center justify-between gap-2 pl-6">
                             <div className="min-w-0 flex-1">
@@ -316,7 +333,7 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
                                 </span>
                               ) : (
                                 <span className="font-mono text-[10px] font-bold text-indigo-700">
-                                  {item.progress}%
+                                  {item.progress || 0}%
                                 </span>
                               )}
                             </div>
@@ -359,11 +376,11 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
                                   width: `${pos.widthPct}%`
                                 }}
                                 className="absolute z-10 h-6 rounded-md bg-indigo-100 border border-indigo-300 shadow-2xs overflow-hidden flex items-center transition-all group-hover:border-indigo-400"
-                                title={`${item.name} (${formatShortDate(item.startDate)} - ${formatShortDate(item.endDate)}) : ${item.progress}%`}
+                                title={`${item.name} (${formatShortDate(item.startDate)} - ${formatShortDate(item.endDate)}) : ${item.progress || 0}%`}
                               >
                                 {/* Progress fill inside task bar */}
                                 <div
-                                  style={{ width: `${item.progress}%` }}
+                                  style={{ width: `${item.progress || 0}%` }}
                                   className={`h-full transition-all ${
                                     item.progress === 100
                                       ? 'bg-emerald-500'
@@ -395,13 +412,17 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
 };
 
 function getWeekNumber(d: Date): number {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  try {
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  } catch {
+    return 1;
+  }
 }
 
-function formatShortDate(dateStr: string): string {
+function formatShortDate(dateStr?: string): string {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return dateStr;
