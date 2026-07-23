@@ -1307,6 +1307,8 @@ export default function ProjectDashboard({
                   <GanttChartVisualizer
                     phases={ganttPhases}
                     teamMembers={globalTeam}
+                    projectStartDate={project.startDate}
+                    projectEndDate={project.endDate}
                     onUpdateProgress={(phaseId, itemId, progress) => handleUpdateTaskProgress(phaseId, itemId, progress)}
                     onToggleMilestone={(phaseId, itemId, completed) => handleToggleMilestone(phaseId, itemId, completed)}
                   />

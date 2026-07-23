@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { GanttPhase, GanttItem, TeamMember } from '../types';
-import { Clock, ChevronRight, ChevronDown } from 'lucide-react';
+import { Clock, ChevronRight, ChevronDown, User } from 'lucide-react';
 
 interface GanttChartVisualizerProps {
   phases?: GanttPhase[];
   teamMembers?: TeamMember[];
+  projectStartDate?: string;
+  projectEndDate?: string;
   onUpdateProgress?: (phaseId: string, itemId: string, newProgress: number) => void;
   onToggleMilestone?: (phaseId: string, itemId: string, completed: boolean) => void;
 }
@@ -12,11 +14,12 @@ interface GanttChartVisualizerProps {
 export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
   phases = [],
   teamMembers = [],
+  projectStartDate,
+  projectEndDate,
   onUpdateProgress,
   onToggleMilestone,
 }) => {
   const [collapsedPhases, setCollapsedPhases] = useState<Record<string, boolean>>({});
-  const [timeScale, setTimeScale] = useState<'weeks' | 'months'>('weeks');
 
   const safePhases = useMemo(() => Array.isArray(phases) ? phases : [], [phases]);
 
@@ -39,101 +42,92 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
     return list;
   }, [safePhases]);
 
-  // Determine overall start and end dates for timeline range
-  const { minDate, totalDays, timeColumns } = useMemo(() => {
-    let min = new Date();
-    let max = new Date();
-    max.setDate(max.getDate() + 60); // default 2 months range
+  // Determine overall start and end dates for timeline range directly from Project Start to Project End
+  const { minDate, maxDate, totalDays, timeColumns } = useMemo(() => {
+    let min = projectStartDate ? new Date(projectStartDate) : new Date();
+    let max = projectEndDate ? new Date(projectEndDate) : new Date();
+
+    if (isNaN(min.getTime())) min = new Date();
+    if (isNaN(max.getTime())) {
+      max = new Date(min);
+      max.setDate(max.getDate() + 90); // default 3 months range
+    }
 
     let validDatesFound = false;
 
+    // Expand if items go outside explicitly passed project dates
     allItems.forEach(({ item }) => {
       if (item && item.startDate) {
         const dStart = new Date(item.startDate);
         if (!isNaN(dStart.getTime())) {
-          if (!validDatesFound || dStart < min) min = dStart;
+          if (!validDatesFound && !projectStartDate) min = dStart;
+          else if (dStart < min) min = dStart;
           validDatesFound = true;
         }
       }
       if (item && item.endDate) {
         const dEnd = new Date(item.endDate);
         if (!isNaN(dEnd.getTime())) {
-          if (!validDatesFound || dEnd > max) max = dEnd;
+          if (!validDatesFound && !projectEndDate) max = dEnd;
+          else if (dEnd > max) max = dEnd;
           validDatesFound = true;
         }
       }
     });
 
-    const minTime = min.getTime();
-    const maxTime = max.getTime();
-    const diffDays = Math.max(30, Math.ceil((maxTime - minTime) / (1000 * 60 * 60 * 24)) + 7);
-
-    // Normalize min to start of day
-    const startOfRange = new Date(minTime);
-    startOfRange.setHours(0, 0, 0, 0);
-
-    const endOfRange = new Date(startOfRange.getTime() + diffDays * 24 * 60 * 60 * 1000);
-
-    // Build timeline header columns
-    const cols: { label: string; date: Date; daysInCol: number }[] = [];
-    const curr = new Date(startOfRange);
-
-    if (timeScale === 'months') {
-      while (curr < endOfRange) {
-        const monthName = curr.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }).toUpperCase();
-        cols.push({
-          label: monthName,
-          date: new Date(curr),
-          daysInCol: 30
-        });
-        curr.setMonth(curr.getMonth() + 1);
-        curr.setDate(1);
-      }
-    } else {
-      // Weekly view
-      let safetyCounter = 0;
-      while (curr < endOfRange && safetyCounter < 100) {
-        safetyCounter++;
-        const weekLabel = `Sem ${getWeekNumber(curr)} (${curr.getDate()}/${curr.getMonth() + 1})`;
-        cols.push({
-          label: weekLabel,
-          date: new Date(curr),
-          daysInCol: 7
-        });
-        curr.setDate(curr.getDate() + 7);
-      }
+    // Ensure min < max with at least 15 days range
+    if (max.getTime() <= min.getTime()) {
+      max = new Date(min.getTime() + 30 * 24 * 60 * 60 * 1000);
     }
 
-    const totalDaysCount = Math.max(1, Math.ceil((endOfRange.getTime() - startOfRange.getTime()) / (1000 * 60 * 60 * 24)));
+    const minTime = min.getTime();
+    const maxTime = max.getTime();
+    const totalDaysCount = Math.max(1, Math.ceil((maxTime - minTime) / (1000 * 60 * 60 * 24)));
+
+    // Create 5 clean timeline columns directly spanning from Project Start to Project End
+    const startMs = minTime;
+    const endMs = maxTime;
+    const midMs = startMs + (endMs - startMs) / 2;
+    const q1Ms = startMs + (endMs - startMs) * 0.25;
+    const q3Ms = startMs + (endMs - startMs) * 0.75;
+
+    const cols = [
+      { label: formatDateUpper(new Date(startMs)), pct: 0 },
+      { label: formatDateUpper(new Date(q1Ms)), pct: 25 },
+      { label: 'MILIEU DE PROJET', pct: 50 },
+      { label: formatDateUpper(new Date(q3Ms)), pct: 75 },
+      { label: formatDateUpper(new Date(endMs)), pct: 100 },
+    ];
 
     return {
-      minDate: startOfRange,
-      maxDate: endOfRange,
+      minDate: new Date(startMs),
+      maxDate: new Date(endMs),
       totalDays: totalDaysCount,
       timeColumns: cols
     };
-  }, [allItems, timeScale]);
+  }, [allItems, projectStartDate, projectEndDate]);
 
   // Helper to compute left % and width % for a given item safely
   const getItemPosition = (startDateStr?: string, endDateStr?: string) => {
     const baseMin = minDate ? minDate.getTime() : Date.now();
+    const baseMax = maxDate ? maxDate.getTime() : baseMin + 30 * 24 * 60 * 60 * 1000;
+    const totalMs = Math.max(1, baseMax - baseMin);
+
     const sDate = startDateStr ? new Date(startDateStr) : new Date(baseMin);
     let eDate = endDateStr ? new Date(endDateStr) : new Date(sDate.getTime());
 
     if (isNaN(sDate.getTime())) sDate.setTime(baseMin);
     if (isNaN(eDate.getTime())) eDate.setTime(sDate.getTime());
 
-    const startDiffDays = (sDate.getTime() - baseMin) / (1000 * 60 * 60 * 24);
-    const durationDays = Math.max(1, (eDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24));
+    const startDiffMs = sDate.getTime() - baseMin;
+    const durationMs = Math.max(0, eDate.getTime() - sDate.getTime());
 
-    const safeTotal = totalDays > 0 ? totalDays : 30;
-
-    const leftPct = Math.max(0, Math.min(100, (startDiffDays / safeTotal) * 100));
-    const widthPct = Math.max(3, Math.min(100 - leftPct, (durationDays / safeTotal) * 100));
+    const leftPct = Math.max(0, Math.min(100, (startDiffMs / totalMs) * 100));
+    const widthPct = Math.max(2.5, Math.min(100 - leftPct, (durationMs / totalMs) * 100));
 
     return {
       leftPct: isNaN(leftPct) ? 0 : leftPct,
-      widthPct: isNaN(widthPct) ? 5 : widthPct
+      widthPct: isNaN(widthPct) ? 3 : widthPct
     };
   };
 
@@ -149,28 +143,10 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
           </h3>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Timeline scale selector */}
-          <div className="bg-slate-800/80 p-0.5 rounded-lg flex text-[11px] font-bold border border-slate-700/60">
-            <button
-              type="button"
-              onClick={() => setTimeScale('weeks')}
-              className={`px-2.5 py-1 rounded transition-all ${
-                timeScale === 'weeks' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Semaines
-            </button>
-            <button
-              type="button"
-              onClick={() => setTimeScale('months')}
-              className={`px-2.5 py-1 rounded transition-all ${
-                timeScale === 'months' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Mois
-            </button>
-          </div>
+        <div className="flex items-center gap-3 text-xs text-slate-400 font-medium">
+          <span className="bg-slate-800 text-indigo-300 border border-slate-700/80 px-2.5 py-1 rounded-lg text-[11px] font-bold">
+            🗓️ Du {formatShortDate(minDate.toISOString())} au {formatShortDate(maxDate.toISOString())}
+          </span>
         </div>
       </div>
 
@@ -185,19 +161,19 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
         <div className="border border-slate-800 rounded-xl overflow-x-auto bg-slate-950/80 shadow-2xs">
           <div className="min-w-[850px]">
             
-            {/* Timeline Header Row */}
+            {/* Timeline Header Row (Project Start to Project End) */}
             <div className="flex border-b border-slate-800 bg-slate-900/90 font-bold text-[11px] text-slate-300">
               {/* Left Column Header */}
               <div className="w-80 p-3 border-r border-slate-800 shrink-0 flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-200">
                 <span>PHASES / LIVRABLES</span>
               </div>
 
-              {/* Right Columns Header */}
+              {/* Right Timeline Header directly spanning Start to End */}
               <div className="flex-1 flex overflow-hidden">
                 {timeColumns.map((col, idx) => (
                   <div
                     key={idx}
-                    className="border-r border-slate-800/80 p-2 text-center text-[10px] font-bold text-slate-400 truncate flex-1 min-w-[60px]"
+                    className="border-r border-slate-800/80 p-2 text-center text-[10px] font-bold text-slate-300 truncate flex-1 min-w-[70px]"
                   >
                     {col.label}
                   </div>
@@ -235,7 +211,7 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
                       {/* Timeline background grid for phase row */}
                       <div className="flex-1 relative bg-slate-950/30 flex">
                         {timeColumns.map((col, idx) => (
-                          <div key={idx} className="border-r border-slate-800/40 flex-1 min-w-[60px]" />
+                          <div key={idx} className="border-r border-slate-800/40 flex-1 min-w-[70px]" />
                         ))}
                       </div>
                     </div>
@@ -250,35 +226,58 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
                         ? allItems.find(x => x.item && x.item.id === item.predecessorId)?.item
                         : null;
 
+                      // Assigned members lookup
+                      const assignedList = Array.isArray(item.assignedTo)
+                        ? item.assignedTo
+                        : typeof item.assignedTo === 'string' && item.assignedTo
+                        ? [item.assignedTo]
+                        : [];
+                      const assignedNames = assignedList
+                        .map(id => (teamMembers || []).find(tm => tm && tm.id === id)?.firstName)
+                        .filter(Boolean)
+                        .join(', ');
+
                       return (
                         <div key={item.id || Math.random()} className="flex hover:bg-slate-800/40 transition-colors group">
-                          {/* Left Column: Item Name & Predecessor */}
+                          {/* Left Column: Item Name, Assigned People & Predecessor */}
                           <div className="w-80 p-2.5 border-r border-slate-800 shrink-0 flex items-center justify-between gap-2 pl-6">
-                            <div className="min-w-0 flex-1 flex items-center gap-2">
-                              {item.type === 'milestone' ? (
-                                <span className="text-amber-400 font-bold text-xs shrink-0">◆</span>
-                              ) : (
-                                <span className="w-2.5 h-2.5 rounded-xs bg-indigo-500 shrink-0 inline-block" />
-                              )}
-                              <span className={`truncate text-xs font-semibold ${
-                                item.type === 'milestone' ? 'text-amber-300 font-bold' : 'text-slate-200'
-                              }`}>
-                                {item.name}
-                              </span>
-                              {predecessorItem && (
-                                <span className="text-[10px] text-slate-400 italic truncate shrink-0" title={`Prédécesseur: ${predecessorItem.name}`}>
-                                  (🔗 {predecessorItem.name})
+                            <div className="min-w-0 flex-1 flex flex-col justify-center">
+                              <div className="flex items-center gap-2 min-w-0">
+                                {item.type === 'milestone' ? (
+                                  <span className="text-amber-400 font-bold text-xs shrink-0">◆</span>
+                                ) : (
+                                  <span className="w-2.5 h-2.5 rounded-xs bg-indigo-500 shrink-0 inline-block" />
+                                )}
+                                <span className={`truncate text-xs font-semibold ${
+                                  item.type === 'milestone' ? 'text-amber-300 font-bold' : 'text-slate-200'
+                                }`}>
+                                  {item.name}
                                 </span>
-                              )}
+                              </div>
+
+                              {/* Subtitle line showing Assigned People & Predecessor */}
+                              <div className="flex flex-wrap items-center gap-2 mt-0.5 text-[10px] text-slate-400">
+                                {assignedNames && (
+                                  <span className="text-indigo-300 font-medium flex items-center gap-1 shrink-0">
+                                    <User className="w-2.5 h-2.5 text-indigo-400 inline" />
+                                    {assignedNames}
+                                  </span>
+                                )}
+                                {predecessorItem && (
+                                  <span className="text-slate-400 italic truncate shrink-0" title={`Prédécesseur: ${predecessorItem.name}`}>
+                                    (🔗 {predecessorItem.name})
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
                           {/* Right Column: Timeline Bar */}
-                          <div className="flex-1 relative flex items-center py-2 px-1 min-h-[38px] overflow-hidden">
-                            {/* Grid lines */}
+                          <div className="flex-1 relative flex items-center py-2 px-1 min-h-[42px] overflow-hidden">
+                            {/* Vertical Grid lines matching header */}
                             <div className="absolute inset-0 flex pointer-events-none">
                               {timeColumns.map((col, idx) => (
-                                <div key={idx} className="border-r border-slate-800/50 flex-1 min-w-[60px]" />
+                                <div key={idx} className="border-r border-slate-800/50 flex-1 min-w-[70px]" />
                               ))}
                             </div>
 
@@ -291,7 +290,7 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => onToggleMilestone && onToggleMilestone(phase.id, item.id, !item.completed)}
-                                  className={`px-2 py-0.5 rounded-md font-bold text-[10px] shadow-md transition-transform hover:scale-110 flex items-center gap-1 border ${
+                                  className={`px-2.5 py-1 rounded-md font-bold text-[10px] shadow-md transition-transform hover:scale-110 flex items-center gap-1 border ${
                                     item.completed
                                       ? 'bg-emerald-600 border-emerald-500 text-white'
                                       : 'bg-amber-500 border-amber-400 text-slate-950'
@@ -307,7 +306,7 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
                                   left: `${pos.leftPct}%`,
                                   width: `${pos.widthPct}%`
                                 }}
-                                className={`absolute z-10 h-5 rounded-md border shadow-xs overflow-hidden flex items-center justify-center transition-all ${
+                                className={`absolute z-10 h-5.5 rounded-md border shadow-xs overflow-hidden flex items-center justify-center transition-all ${
                                   item.completed || item.progress === 100
                                     ? 'bg-emerald-600/90 border-emerald-500 text-white'
                                     : 'bg-indigo-600/90 border-indigo-400 text-white'
@@ -353,20 +352,18 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
   );
 };
 
-function getWeekNumber(d: Date): number {
-  try {
-    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
-    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-    return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-  } catch {
-    return 1;
-  }
+function formatDateUpper(d: Date): string {
+  if (!d || isNaN(d.getTime())) return '';
+  const day = String(d.getDate()).padStart(2, '0');
+  const monthNames = ['JANV.', 'FÉVR.', 'MARS', 'AVR.', 'MAI', 'JUIN', 'JUIL.', 'AOÛT', 'SEPT.', 'OCT.', 'NOV.', 'DÉC.'];
+  const month = monthNames[d.getMonth()];
+  const year = d.getFullYear();
+  return `${day} ${month} ${year}`;
 }
 
 function formatShortDate(dateStr?: string): string {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return dateStr;
-  return `${d.getDate()}/${d.getMonth() + 1}`;
+  return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
 }
