@@ -6,9 +6,10 @@ interface WorkloadTabProps {
   project: Project;
   globalTeam: TeamMember[];
   onUpdateProject: (updates: Partial<Project>) => void;
+  canEdit?: boolean;
 }
 
-export default function WorkloadTab({ project, globalTeam, onUpdateProject }: WorkloadTabProps) {
+export default function WorkloadTab({ project, globalTeam, onUpdateProject, canEdit = true }: WorkloadTabProps) {
   const ganttPhases = project.ganttPhases || [];
 
   // Flatten all items across phases
@@ -225,7 +226,7 @@ export default function WorkloadTab({ project, globalTeam, onUpdateProject }: Wo
                             </div>
 
                             {/* Slider to adjust worked days / progress directly */}
-                            {!isMilestone && (
+                            {!isMilestone && canEdit && (
                               <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60">
                                 <span className="text-[9px] font-bold text-slate-400">Jours travaillés:</span>
                                 <input

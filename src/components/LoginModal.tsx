@@ -8,6 +8,7 @@ interface LoginModalProps {
   onLoginSuccess: (user: UserAccount) => void;
   adminUsername: string;
   users?: UserAccount[];
+  isCancelable?: boolean;
 }
 
 export default function LoginModal({
@@ -15,7 +16,8 @@ export default function LoginModal({
   onClose,
   onLoginSuccess,
   adminUsername,
-  users = []
+  users = [],
+  isCancelable = true
 }: LoginModalProps) {
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
@@ -177,17 +179,19 @@ export default function LoginModal({
           </div>
 
           <div className="flex gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-1/3 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
-            >
-              Annuler
-            </button>
+            {isCancelable && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-1/3 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+            )}
             <button
               type="submit"
               disabled={isLoading}
-              className="w-2/3 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-sm transition-all cursor-pointer flex items-center justify-center gap-2"
+              className={`${isCancelable ? 'w-2/3' : 'w-full'} py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2`}
             >
               <LogIn className="w-4 h-4" />
               {isLoading ? 'Vérification...' : 'Se connecter'}

@@ -5,9 +5,10 @@ import { FileSignature, CheckCircle2, Lock, Save, ShieldCheck, AlertCircle } fro
 interface ClosureTabProps {
   project: Project;
   onUpdateProject: (updates: Partial<Project>) => void;
+  canEdit?: boolean;
 }
 
-export default function ClosureTab({ project, onUpdateProject }: ClosureTabProps) {
+export default function ClosureTab({ project, onUpdateProject, canEdit = true }: ClosureTabProps) {
   const closureData: ProjectClosureData = project.closureData || {
     deliverablesValidated: false,
     acceptanceSigned: false,
@@ -199,32 +200,34 @@ export default function ClosureTab({ project, onUpdateProject }: ClosureTabProps
         </div>
 
         {/* Action bar */}
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-2 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={handleToggleClosed}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-              formState.isClosed
-                ? 'bg-slate-200 text-slate-800 hover:bg-slate-300'
-                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-            }`}
-          >
-            <Lock className="w-4 h-4" />
-            {formState.isClosed ? 'Rouvrir le projet (Annuler la clôture)' : 'Prononcer la Clôture Officielle'}
-          </button>
-
-          <div className="flex items-center gap-3">
-            {savedMessage && (
-              <span className="text-xs text-emerald-600 font-bold">✓ Enregistré avec succès !</span>
-            )}
+        {canEdit && (
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-2 border-t border-slate-100">
             <button
-              type="submit"
-              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-colors shadow-xs flex items-center gap-2"
+              type="button"
+              onClick={handleToggleClosed}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                formState.isClosed
+                  ? 'bg-slate-200 text-slate-800 hover:bg-slate-300'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+              }`}
             >
-              <Save className="w-4 h-4" /> Enregistrer le Bilan
+              <Lock className="w-4 h-4" />
+              {formState.isClosed ? 'Rouvrir le projet (Annuler la clôture)' : 'Prononcer la Clôture Officielle'}
             </button>
+
+            <div className="flex items-center gap-3">
+              {savedMessage && (
+                <span className="text-xs text-emerald-600 font-bold">✓ Enregistré avec succès !</span>
+              )}
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-colors shadow-xs flex items-center gap-2 cursor-pointer"
+              >
+                <Save className="w-4 h-4" /> Enregistrer le Bilan
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
       </form>
     </div>

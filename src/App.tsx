@@ -42,11 +42,19 @@ import {
 export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [globalTeam, setGlobalTeam] = useState<TeamMember[]>([]);
 
   // RBAC & Auth state
   const [userGroups, setUserGroups] = useState<UserGroup[]>(DEFAULT_GROUPS);
   const [users, setUsers] = useState<UserAccount[]>([]);
+  
+  // Dynamic global team members derived from created user accounts
+  const globalTeam: TeamMember[] = users.map((u) => ({
+    id: u.id,
+    firstName: u.firstName || u.username,
+    lastName: u.lastName || '',
+    role: u.role || (u.isAdmin ? 'Administrateur' : 'Collaborateur'),
+  }));
+
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     const saved = localStorage.getItem('pm_app_current_user');
     if (saved) {
@@ -89,17 +97,11 @@ export default function App() {
   
   // Modals / Overlays
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isTemplateOverlayOpen, setIsTemplateOverlayOpen] = useState(false);
   
   // Custom confirmation modal
   const [projectToDeleteId, setProjectToDeleteId] = useState<string | null>(null);
-
-  // New team member form state
-  const [newFirstName, setNewFirstName] = useState('');
-  const [newLastName, setNewLastName] = useState('');
-  const [newRole, setNewRole] = useState('');
 
   // 1. Initial State Load from Server API (with LocalStorage fallback)
   useEffect(() => {
@@ -114,13 +116,6 @@ export default function App() {
           localStorage.setItem('pm_app_projects_v2', JSON.stringify(data.projects));
         } else {
           loadFromLocalStorageProjects();
-        }
-
-        if (data && Array.isArray(data.globalTeam)) {
-          setGlobalTeam(data.globalTeam);
-          localStorage.setItem('pm_app_global_team', JSON.stringify(data.globalTeam));
-        } else {
-          loadFromLocalStorageTeam();
         }
 
         if (data && Array.isArray(data.userGroups) && data.userGroups.length > 0) {
@@ -140,7 +135,6 @@ export default function App() {
       .catch((err) => {
         console.warn('Could not fetch data from server, falling back to localStorage:', err);
         loadFromLocalStorageProjects();
-        loadFromLocalStorageTeam();
         loadFromLocalStorageGroups();
         loadFromLocalStorageUsers();
       });
@@ -157,19 +151,6 @@ export default function App() {
     } else {
       setProjects(INITIAL_PROJECTS);
       localStorage.setItem('pm_app_projects_v2', JSON.stringify(INITIAL_PROJECTS));
-    }
-  };
-
-  const loadFromLocalStorageTeam = () => {
-    const savedTeam = localStorage.getItem('pm_app_global_team');
-    if (savedTeam) {
-      try {
-        setGlobalTeam(JSON.parse(savedTeam));
-      } catch (e) {
-        setGlobalTeam([]);
-      }
-    } else {
-      setGlobalTeam([]);
     }
   };
 
@@ -255,40 +236,6 @@ export default function App() {
     }).catch((err) => console.error('Failed to sync projects to server:', err));
   };
 
-  const saveGlobalTeam = (updatedTeam: TeamMember[]) => {
-    setGlobalTeam(updatedTeam);
-    localStorage.setItem('pm_app_global_team', JSON.stringify(updatedTeam));
-
-    fetch('/api/team', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ globalTeam: updatedTeam }),
-    }).catch((err) => console.error('Failed to sync team to server:', err));
-  };
-
-  // Add team member
-  const handleAddTeamMember = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newFirstName.trim() || !newLastName.trim()) return;
-    const newMember: TeamMember = {
-      id: `tm-${Date.now()}`,
-      firstName: newFirstName.trim(),
-      lastName: newLastName.trim(),
-      role: newRole.trim() || 'Collaborateur'
-    };
-    const updated = [...globalTeam, newMember];
-    saveGlobalTeam(updated);
-    setNewFirstName('');
-    setNewLastName('');
-    setNewRole('');
-  };
-
-  // Remove team member
-  const handleRemoveTeamMember = (id: string) => {
-    const updated = globalTeam.filter(m => m.id !== id);
-    saveGlobalTeam(updated);
-  };
-
   // Create or Update project handler
   const handleSaveProject = (projectToSave: Project) => {
     const exists = projects.some(p => p.id === projectToSave.id);
@@ -326,7 +273,41 @@ export default function App() {
   };
 
   const canManageProjects = hasWritePermission(currentUser, userGroups, 'project_management');
-  const canManageTeam = hasWritePermission(currentUser, userGroups, 'team_management');
+
+  // Full-screen Auth Guard: Lock access completely when logged out
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+        {/* Decorative background grid */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b15_1px,transparent_1px),linear-gradient(to_bottom,#1e293b15_1px,transparent_1px)] bg-[size:4rem_4rem] pointer-events-none" />
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-amber-600/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="mb-6 text-center z-10 space-y-2">
+          <div className="inline-flex p-3 bg-indigo-600 rounded-2xl shadow-xl ring-4 ring-indigo-500/20 text-white mb-1">
+            <FolderKanban className="w-8 h-8" />
+          </div>
+          <h1 className="text-2xl font-black font-display tracking-tight text-white">
+            Gouvernance & Gestion de Projets
+          </h1>
+          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            Accès sécurisé réservé aux membres autorisés. Veuillez vous identifier.
+          </p>
+        </div>
+
+        <LoginModal
+          isOpen={true}
+          onClose={() => {}}
+          adminUsername={ADMIN_CONFIG.username}
+          users={users}
+          isCancelable={false}
+          onLoginSuccess={(user) => {
+            setCurrentUser(user);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-300">
@@ -411,28 +392,17 @@ export default function App() {
               Référentiel (Modèles)
             </button>
             
-            {!selectedProjectId && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsTeamModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700/80 hover:text-white rounded-xl border border-slate-700/80 transition-all shadow-xs cursor-pointer"
-                >
-                  <Users className="w-3.5 h-3.5 text-emerald-400" />
-                  Gérer l'Équipe
-                </button>
-                {canManageProjects && (
-                  <button
-                    onClick={() => {
-                      setEditingProject(null);
-                      setIsModalOpen(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-sm transition-all cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Nouveau Projet
-                  </button>
-                )}
-              </div>
+            {!selectedProjectId && canManageProjects && (
+              <button
+                onClick={() => {
+                  setEditingProject(null);
+                  setIsModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-sm transition-all cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Nouveau Projet
+              </button>
             )}
           </div>
 
@@ -495,126 +465,6 @@ export default function App() {
         )}
 
       </main>
-
-      {/* TEAM MANAGEMENT MODAL */}
-      {isTeamModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 w-full max-w-lg shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
-            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-850">
-              <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
-                    Gestion de l'Équipe Globale
-                  </h3>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500">Ajoutez et gérez les collaborateurs de l'organisation</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsTeamModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-5 overflow-y-auto flex-1 space-y-5">
-              {/* Add form */}
-              <form onSubmit={handleAddTeamMember} className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
-                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  Nouveau Collaborateur
-                </h4>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Prénom</label>
-                    <input
-                      type="text"
-                      placeholder="Prénom"
-                      value={newFirstName}
-                      onChange={(e) => setNewFirstName(e.target.value)}
-                      className="text-xs px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 w-full focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Nom</label>
-                    <input
-                      type="text"
-                      placeholder="Nom"
-                      value={newLastName}
-                      onChange={(e) => setNewLastName(e.target.value)}
-                      className="text-xs px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 w-full focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
-                      required
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Métier / Service</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="ex: DSI, Chef de projet, Architecte, Développeur..."
-                      value={newRole}
-                      onChange={(e) => setNewRole(e.target.value)}
-                      className="text-xs px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 flex-1 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
-                      required
-                    />
-                    <button
-                      type="submit"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 rounded-lg shadow-xs transition-colors cursor-pointer text-xs font-bold"
-                    >
-                      <UserPlus className="w-3.5 h-3.5" />
-                      Ajouter
-                    </button>
-                  </div>
-                </div>
-              </form>
-
-              {/* Members List */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Membres de l'Équipe ({globalTeam.length})
-                </h4>
-                <div className="border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden max-h-[300px] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
-                  {globalTeam.length === 0 ? (
-                    <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-8 bg-slate-50/50 dark:bg-slate-850/50">
-                      Aucun collaborateur enregistré pour le moment.
-                    </p>
-                  ) : (
-                    globalTeam.map((member) => (
-                      <div 
-                        key={member.id}
-                        className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors"
-                      >
-                        <div className="text-xs">
-                          <span className="font-bold text-slate-800 dark:text-slate-200">{member.firstName} {member.lastName}</span>
-                          <span className="block text-[10px] text-slate-500 dark:text-slate-400 font-medium">{member.role}</span>
-                        </div>
-                        <button
-                          onClick={() => handleRemoveTeamMember(member.id)}
-                          className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
-                          title="Retirer de l'équipe"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 flex items-center justify-end">
-              <button
-                onClick={() => setIsTeamModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-800 rounded-lg transition-colors"
-              >
-                Fermer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* FOOTER BAR */}
       <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-6 text-center text-xs text-slate-400 dark:text-slate-500 font-medium">

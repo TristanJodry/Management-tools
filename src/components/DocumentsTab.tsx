@@ -6,9 +6,10 @@ import { COMMON_TEMPLATES } from '../data';
 interface DocumentsTabProps {
   project: Project;
   onUpdateProject: (updates: Partial<Project>) => void;
+  canEdit?: boolean;
 }
 
-export default function DocumentsTab({ project, onUpdateProject }: DocumentsTabProps) {
+export default function DocumentsTab({ project, onUpdateProject, canEdit = true }: DocumentsTabProps) {
   const documents: ProjectDocumentItem[] = project.projectDocuments || [];
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -95,12 +96,14 @@ export default function DocumentsTab({ project, onUpdateProject }: DocumentsTabP
           </p>
         </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors shadow-xs flex items-center gap-1.5 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" /> Déposer un Document
-        </button>
+        {canEdit && (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors shadow-xs flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Déposer un Document
+          </button>
+        )}
       </div>
 
       {/* Filters & Search */}
@@ -172,20 +175,24 @@ export default function DocumentsTab({ project, onUpdateProject }: DocumentsTabP
                   >
                     <Eye className="w-3.5 h-3.5" />
                   </button>
-                  <button
-                    onClick={() => setEditingDoc(doc)}
-                    className="p-1 text-slate-400 hover:text-indigo-600"
-                    title="Modifier"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteDocument(doc.id)}
-                    className="p-1 text-slate-400 hover:text-rose-600"
-                    title="Supprimer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {canEdit && (
+                    <>
+                      <button
+                        onClick={() => setEditingDoc(doc)}
+                        className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"
+                        title="Modifier"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteDocument(doc.id)}
+                        className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                        title="Supprimer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

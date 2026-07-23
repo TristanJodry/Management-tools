@@ -5,9 +5,10 @@ import { FileSignature, Save, CheckCircle2, ShieldCheck, Heart, Scale } from 'lu
 interface TeamCharterTabProps {
   project: Project;
   onUpdateProject: (updates: Partial<Project>) => void;
+  canEdit?: boolean;
 }
 
-export default function TeamCharterTab({ project, onUpdateProject }: TeamCharterTabProps) {
+export default function TeamCharterTab({ project, onUpdateProject, canEdit = true }: TeamCharterTabProps) {
   const [charter, setCharter] = useState<TeamCharter>({
     values: project.teamCharter?.values || '',
     rules: project.teamCharter?.rules || '',
@@ -56,10 +57,11 @@ export default function TeamCharterTab({ project, onUpdateProject }: TeamCharter
             <p className="text-[11px] text-slate-500">Ex: Transparence, Respect, Entraide, Confiance, Droit à l'erreur...</p>
             <textarea
               rows={4}
+              disabled={!canEdit}
               value={charter.values}
               onChange={(e) => setCharter({ ...charter, values: e.target.value })}
               placeholder="Rédigez les valeurs fondamentales partagées par l'équipe..."
-              className="w-full text-xs p-3 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              className="w-full text-xs p-3 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -72,10 +74,11 @@ export default function TeamCharterTab({ project, onUpdateProject }: TeamCharter
             <p className="text-[11px] text-slate-500">Ex: Ponctualité aux réunions, Utilisation des canaux de communication, Caméra allumée en visio...</p>
             <textarea
               rows={4}
+              disabled={!canEdit}
               value={charter.rules}
               onChange={(e) => setCharter({ ...charter, rules: e.target.value })}
               placeholder="Définissez les règles opérationnelles au quotidien..."
-              className="w-full text-xs p-3 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              className="w-full text-xs p-3 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -88,10 +91,11 @@ export default function TeamCharterTab({ project, onUpdateProject }: TeamCharter
             <p className="text-[11px] text-slate-500">Ex: Alerter au plus tôt en cas de blocage, Respecter les échéances, Qualité des livrables...</p>
             <textarea
               rows={4}
+              disabled={!canEdit}
               value={charter.commitments}
               onChange={(e) => setCharter({ ...charter, commitments: e.target.value })}
               placeholder="Détaillez les engagements mutuels de l'équipe..."
-              className="w-full text-xs p-3 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              className="w-full text-xs p-3 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -104,24 +108,27 @@ export default function TeamCharterTab({ project, onUpdateProject }: TeamCharter
             <p className="text-[11px] text-slate-500">Ex: Consensus privilégié, Arbitrage du Chef de projet en cas de désaccord, Escalade au comité...</p>
             <textarea
               rows={4}
+              disabled={!canEdit}
               value={charter.decisionRules}
               onChange={(e) => setCharter({ ...charter, decisionRules: e.target.value })}
               placeholder="Spécifiez comment les décisions sont prises et validées..."
-              className="w-full text-xs p-3 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              className="w-full text-xs p-3 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed"
             />
           </div>
 
         </div>
 
-        <div className="flex justify-end pt-2">
-          <button
-            type="submit"
-            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-colors shadow-xs flex items-center gap-2"
-          >
-            <Save className="w-4 h-4" />
-            Enregistrer la Charte d'Équipe
-          </button>
-        </div>
+        {canEdit && (
+          <div className="flex justify-end pt-2">
+            <button
+              type="submit"
+              className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-colors shadow-xs flex items-center gap-2 cursor-pointer"
+            >
+              <Save className="w-4 h-4" />
+              Enregistrer la Charte d'Équipe
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );

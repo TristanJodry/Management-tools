@@ -5,9 +5,10 @@ import { Sliders, Plus, Trash2, Edit3, CheckCircle, Award, Scale, HelpCircle } f
 interface DecisionMatrixTabProps {
   project: Project;
   onUpdateProject: (updates: Partial<Project>) => void;
+  canEdit?: boolean;
 }
 
-export default function DecisionMatrixTab({ project, onUpdateProject }: DecisionMatrixTabProps) {
+export default function DecisionMatrixTab({ project, onUpdateProject, canEdit = true }: DecisionMatrixTabProps) {
   const decisions: DecisionItem[] = project.decisionMatrix || [];
 
   // Active decision being created or edited
@@ -212,12 +213,14 @@ export default function DecisionMatrixTab({ project, onUpdateProject }: Decision
             Pondérez les critères, évaluez les options comparatives et sélectionnez objectivement la meilleure alternative.
           </p>
         </div>
-        <button
-          onClick={() => setShowAddDecision(true)}
-          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors shadow-xs flex items-center gap-1.5 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" /> Nouvelle Décision
-        </button>
+        {canEdit && (
+          <button
+            onClick={() => setShowAddDecision(true)}
+            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors shadow-xs flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Nouvelle Décision
+          </button>
+        )}
       </div>
 
       {/* Decision selection selector */}

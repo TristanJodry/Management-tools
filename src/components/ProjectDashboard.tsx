@@ -1128,7 +1128,7 @@ export default function ProjectDashboard({
               </div>
 
               {stakeholderSubTab === 'charter' ? (
-                <TeamCharterTab project={project} onUpdateProject={updateProjectData} />
+                <TeamCharterTab project={project} onUpdateProject={updateProjectData} canEdit={canEditCurrentModule} />
               ) : (
                 <div className="space-y-6">
                   <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 pb-3">
@@ -1138,104 +1138,106 @@ export default function ProjectDashboard({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className={`grid grid-cols-1 ${canEditCurrentModule ? 'lg:grid-cols-3' : 'lg:grid-cols-1'} gap-6`}>
                     
                     {/* Left side column: Forms */}
-                    <div className="space-y-6">
-                      
-                      {/* Create Group Form */}
-                      <form onSubmit={handleAddShGroup} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
-                          <Plus className="w-3.5 h-3.5 text-indigo-600" /> Créer un Groupe
-                        </h4>
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nom du Groupe</label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="ex: Comité de Direction, Prestataires..."
-                            value={newShGroupFormName}
-                            onChange={(e) => setNewShGroupFormName(e.target.value)}
-                            className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                          />
-                        </div>
-                        <button
-                          type="submit"
-                          className="w-full py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded transition-colors shadow-2xs"
-                        >
-                          Ajouter le Groupe
-                        </button>
-                      </form>
-
-                      {/* Add Stakeholder Form */}
-                      <form onSubmit={handleAddStakeholderToGroup} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
-                          <Plus className="w-3.5 h-3.5 text-indigo-600" /> Ajouter une Partie Prenante
-                        </h4>
-
-                        <div className="space-y-2.5">
+                    {canEditCurrentModule && (
+                      <div className="space-y-6">
+                        
+                        {/* Create Group Form */}
+                        <form onSubmit={handleAddShGroup} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
+                            <Plus className="w-3.5 h-3.5 text-indigo-600" /> Créer un Groupe
+                          </h4>
                           <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Groupe Cible</label>
-                            <select
-                              value={shGroupId}
-                              onChange={(e) => setShGroupId(e.target.value)}
-                              className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                            >
-                              {stakeholderGroups.map((g) => (
-                                <option key={g.id} value={g.id}>{g.name}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nom & Prénom</label>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nom du Groupe</label>
                             <input
                               type="text"
                               required
-                              placeholder="ex: Jean Dupont"
-                              value={shName}
-                              onChange={(e) => setShName(e.target.value)}
+                              placeholder="ex: Comité de Direction, Prestataires..."
+                              value={newShGroupFormName}
+                              onChange={(e) => setNewShGroupFormName(e.target.value)}
                               className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
                             />
                           </div>
+                          <button
+                            type="submit"
+                            className="w-full py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded transition-colors shadow-2xs cursor-pointer"
+                          >
+                            Ajouter le Groupe
+                          </button>
+                        </form>
 
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Rôle / Titre</label>
-                            <input
-                              type="text"
-                              placeholder="ex: Directeur Métier"
-                              value={shRole}
-                              onChange={(e) => setShRole(e.target.value)}
-                              className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                            />
+                        {/* Add Stakeholder Form */}
+                        <form onSubmit={handleAddStakeholderToGroup} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
+                            <Plus className="w-3.5 h-3.5 text-indigo-600" /> Ajouter une Partie Prenante
+                          </h4>
+
+                          <div className="space-y-2.5">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Groupe Cible</label>
+                              <select
+                                value={shGroupId}
+                                onChange={(e) => setShGroupId(e.target.value)}
+                                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                              >
+                                {stakeholderGroups.map((g) => (
+                                  <option key={g.id} value={g.id}>{g.name}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nom & Prénom</label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="ex: Jean Dupont"
+                                value={shName}
+                                onChange={(e) => setShName(e.target.value)}
+                                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Rôle / Titre</label>
+                              <input
+                                type="text"
+                                placeholder="ex: Directeur Métier"
+                                value={shRole}
+                                onChange={(e) => setShRole(e.target.value)}
+                                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Influence / Impact</label>
+                              <select
+                                value={shInfluence}
+                                onChange={(e) => setShInfluence(e.target.value as any)}
+                                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-semibold"
+                              >
+                                <option value="low">Faible</option>
+                                <option value="medium">Moyenne</option>
+                                <option value="high">Élevée</option>
+                              </select>
+                            </div>
                           </div>
 
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Influence / Impact</label>
-                            <select
-                              value={shInfluence}
-                              onChange={(e) => setShInfluence(e.target.value as any)}
-                              className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-semibold"
-                            >
-                              <option value="low">Faible</option>
-                              <option value="medium">Moyenne</option>
-                              <option value="high">Élevée</option>
-                            </select>
-                          </div>
-                        </div>
+                          <button
+                            type="submit"
+                            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded transition-colors shadow-2xs cursor-pointer"
+                          >
+                            Ajouter la Partie Prenante
+                          </button>
+                        </form>
 
-                        <button
-                          type="submit"
-                          className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded transition-colors shadow-2xs"
-                        >
-                          Ajouter la Partie Prenante
-                        </button>
-                      </form>
-
-                    </div>
+                      </div>
+                    )}
 
                     {/* Right side column: Groups & Stakeholders List */}
-                    <div className="lg:col-span-2 space-y-4">
+                    <div className={`${canEditCurrentModule ? 'lg:col-span-2' : ''} space-y-4`}>
                       {stakeholderGroups.map((group) => (
                         <div key={group.id} className="bg-slate-50/50 rounded-xl border border-slate-200 p-4 space-y-3">
                           <div className="flex justify-between items-center border-b border-slate-200 pb-2">
@@ -1243,22 +1245,24 @@ export default function ProjectDashboard({
                               <Users className="w-3.5 h-3.5 text-indigo-600" />
                               {group.name}
                             </h4>
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => setEditingGroup(group)}
-                                className="text-slate-400 hover:text-indigo-600 p-1 text-xs flex items-center gap-1 font-semibold"
-                                title="Modifier le groupe"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" /> Modifier
-                              </button>
-                              <button
-                                onClick={() => handleRemoveShGroup(group.id)}
-                                className="text-slate-400 hover:text-rose-600 p-1"
-                                title="Supprimer le groupe"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
+                            {canEditCurrentModule && (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => setEditingGroup(group)}
+                                  className="text-slate-400 hover:text-indigo-600 p-1 text-xs flex items-center gap-1 font-semibold cursor-pointer"
+                                  title="Modifier le groupe"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" /> Modifier
+                                </button>
+                                <button
+                                  onClick={() => handleRemoveShGroup(group.id)}
+                                  className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
+                                  title="Supprimer le groupe"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
                           </div>
 
                           <div className="space-y-1.5">
@@ -1277,20 +1281,24 @@ export default function ProjectDashboard({
                                     }`}>
                                       {stk.influence === 'high' ? 'High' : stk.influence === 'medium' ? 'Med' : 'Low'}
                                     </span>
-                                    <button
-                                      onClick={() => setEditingStakeholder({ groupId: group.id, stakeholder: stk })}
-                                      className="text-slate-400 hover:text-indigo-600 p-1"
-                                      title="Modifier"
-                                    >
-                                      <Edit3 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => handleRemoveStakeholderFromGroup(group.id, stk.id)}
-                                      className="text-slate-400 hover:text-rose-600 p-1"
-                                      title="Supprimer"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                                    {canEditCurrentModule && (
+                                      <>
+                                        <button
+                                          onClick={() => setEditingStakeholder({ groupId: group.id, stakeholder: stk })}
+                                          className="text-slate-400 hover:text-indigo-600 p-1 cursor-pointer"
+                                          title="Modifier"
+                                        >
+                                          <Edit3 className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleRemoveStakeholderFromGroup(group.id, stk.id)}
+                                          className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
+                                          title="Supprimer"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
                               ))
@@ -1309,7 +1317,7 @@ export default function ProjectDashboard({
 
           {/* TAB 2: MATRICE DE DÉCISION */}
           {activeTab === 'decisionMatrix' && (
-            <DecisionMatrixTab project={project} onUpdateProject={updateProjectData} />
+            <DecisionMatrixTab project={project} onUpdateProject={updateProjectData} canEdit={canEditCurrentModule} />
           )}
 
           {/* TAB 3: PLANIFICATION */}
@@ -1341,7 +1349,7 @@ export default function ProjectDashboard({
               </div>
 
               {planificationSubTab === 'workload' ? (
-                <WorkloadTab project={project} globalTeam={globalTeam} onUpdateProject={updateProjectData} />
+                <WorkloadTab project={project} globalTeam={globalTeam} onUpdateProject={updateProjectData} canEdit={canEditCurrentModule} />
               ) : (
                 <div className="space-y-6">
                   {/* Interactive Gantt Visualizer */}
@@ -1355,22 +1363,24 @@ export default function ProjectDashboard({
                   />
 
                   {/* Create Phase form */}
-                  <form onSubmit={handleAddPhase} className="flex gap-2 max-w-md">
-                    <input
-                      type="text"
-                      required
-                      placeholder="Nom de la nouvelle phase (ex: Phase 3 - Recette)"
-                      value={newPhaseName}
-                      onChange={(e) => setNewPhaseName(e.target.value)}
-                      className="text-xs px-3 py-1.5 border border-slate-300 rounded-lg bg-white flex-1"
-                    />
-                    <button
-                      type="submit"
-                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs"
-                    >
-                      Ajouter Phase
-                    </button>
-                  </form>
+                  {canEditCurrentModule && (
+                    <form onSubmit={handleAddPhase} className="flex gap-2 max-w-md">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Nom de la nouvelle phase (ex: Phase 3 - Recette)"
+                        value={newPhaseName}
+                        onChange={(e) => setNewPhaseName(e.target.value)}
+                        className="text-xs px-3 py-1.5 border border-slate-300 rounded-lg bg-white flex-1"
+                      />
+                      <button
+                        type="submit"
+                        className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs cursor-pointer"
+                      >
+                        Ajouter Phase
+                      </button>
+                    </form>
+                  )}
 
                   {/* Gantt phases table */}
                   <div className="space-y-6">
@@ -1381,20 +1391,22 @@ export default function ProjectDashboard({
                             <Layers className="w-4 h-4 text-indigo-600" />
                             {phase.name}
                           </h4>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => setActivePhaseIdForNewItem(phase.id)}
-                              className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] rounded transition-colors flex items-center gap-1"
-                            >
-                              <Plus className="w-3 h-3" /> Ajouter Tâche/Jalon
-                            </button>
-                            <button
-                              onClick={() => handleRemovePhase(phase.id)}
-                              className="text-slate-400 hover:text-rose-600 p-1"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          {canEditCurrentModule && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setActivePhaseIdForNewItem(phase.id)}
+                                className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] rounded transition-colors flex items-center gap-1 cursor-pointer"
+                              >
+                                <Plus className="w-3 h-3" /> Ajouter Tâche/Jalon
+                              </button>
+                              <button
+                                onClick={() => handleRemovePhase(phase.id)}
+                                className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         {/* Add Item to Phase form */}
@@ -1567,12 +1579,13 @@ export default function ProjectDashboard({
                                     {isMilestone ? (
                                       <button
                                         type="button"
+                                        disabled={!canEditCurrentModule}
                                         onClick={() => handleToggleMilestone(phase.id, item.id, !item.completed)}
                                         className={`px-2.5 py-1 text-xs font-bold rounded transition-colors ${
                                           item.completed
                                             ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                                             : 'bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200'
-                                        }`}
+                                        } ${!canEditCurrentModule ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}`}
                                       >
                                         {item.completed ? '✓ Validé' : 'À valider'}
                                       </button>
@@ -1584,8 +1597,9 @@ export default function ProjectDashboard({
                                           max={100}
                                           step={5}
                                           value={item.progress || 0}
+                                          disabled={!canEditCurrentModule}
                                           onChange={(e) => handleUpdateTaskProgress(phase.id, item.id, Number(e.target.value))}
-                                          className="w-24 accent-indigo-600 cursor-pointer"
+                                          className={`w-24 accent-indigo-600 ${!canEditCurrentModule ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}`}
                                         />
                                         <span className="font-mono text-xs font-bold text-indigo-700 w-8 text-right">
                                           {item.progress || 0}%
@@ -1593,20 +1607,24 @@ export default function ProjectDashboard({
                                       </div>
                                     )}
 
-                                    <button
-                                      onClick={() => setEditingGanttItem({ phaseId: phase.id, item: { ...item } })}
-                                      className="p-1 text-slate-400 hover:text-indigo-600"
-                                      title="Modifier"
-                                    >
-                                      <Edit3 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => handleRemoveGanttItem(phase.id, item.id)}
-                                      className="p-1 text-slate-400 hover:text-rose-600"
-                                      title="Supprimer"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                                    {canEditCurrentModule && (
+                                      <>
+                                        <button
+                                          onClick={() => setEditingGanttItem({ phaseId: phase.id, item: { ...item } })}
+                                          className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"
+                                          title="Modifier"
+                                        >
+                                          <Edit3 className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleRemoveGanttItem(phase.id, item.id)}
+                                          className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                                          title="Supprimer"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </>
+                                    )}
                                   </div>
                                 </div>
                               );
@@ -1635,22 +1653,24 @@ export default function ProjectDashboard({
               </div>
 
               {/* Add Custom Row */}
-              <form onSubmit={handleAddCustomRaciRow} className="flex gap-2 max-w-md">
-                <input
-                  type="text"
-                  required
-                  placeholder="Ajouter un livrable/activité spécifique..."
-                  value={newRaciRow}
-                  onChange={(e) => setNewRaciRow(e.target.value)}
-                  className="text-xs px-3 py-1.5 border border-slate-300 rounded-lg bg-white flex-1"
-                />
-                <button
-                  type="submit"
-                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs"
-                >
-                  Ajouter Ligne
-                </button>
-              </form>
+              {canEditCurrentModule && (
+                <form onSubmit={handleAddCustomRaciRow} className="flex gap-2 max-w-md">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ajouter un livrable/activité spécifique..."
+                    value={newRaciRow}
+                    onChange={(e) => setNewRaciRow(e.target.value)}
+                    className="text-xs px-3 py-1.5 border border-slate-300 rounded-lg bg-white flex-1"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs cursor-pointer"
+                  >
+                    Ajouter Ligne
+                  </button>
+                </form>
+              )}
 
               {/* RACI Table */}
               <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white">
@@ -1663,7 +1683,7 @@ export default function ProjectDashboard({
                           {part.name}
                         </th>
                       ))}
-                      <th className="p-3 border-b border-slate-200 text-center w-12">Action</th>
+                      {canEditCurrentModule && <th className="p-3 border-b border-slate-200 text-center w-12">Action</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -1676,13 +1696,14 @@ export default function ProjectDashboard({
                             <td key={part.id} className="p-2 text-center">
                               <select
                                 value={currentVal}
+                                disabled={!canEditCurrentModule}
                                 onChange={(e) => handleUpdateRaciCell(rowName, part.id, e.target.value)}
                                 className={`text-xs font-bold px-2 py-1 border rounded bg-white ${
                                   currentVal === 'R' ? 'text-indigo-600 border-indigo-300 bg-indigo-50/40' :
                                   currentVal === 'A' ? 'text-emerald-600 border-emerald-300 bg-emerald-50/40' :
                                   currentVal === 'C' ? 'text-amber-600 border-amber-300 bg-amber-50/40' :
                                   currentVal === 'I' ? 'text-slate-600 border-slate-300 bg-slate-50/40' : ''
-                                }`}
+                                } ${!canEditCurrentModule ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}`}
                               >
                                 <option value="">-</option>
                                 <option value="R">R (Réalise)</option>
@@ -1693,15 +1714,17 @@ export default function ProjectDashboard({
                             </td>
                           );
                         })}
-                        <td className="p-2 text-center">
-                          <button
-                            onClick={() => handleDeleteCustomRaciRow(rowName)}
-                            className="text-slate-400 hover:text-rose-600 p-1"
-                            title="Supprimer la ligne"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </td>
+                        {canEditCurrentModule && (
+                          <td className="p-2 text-center">
+                            <button
+                              onClick={() => handleDeleteCustomRaciRow(rowName)}
+                              className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
+                              title="Supprimer la ligne"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -1730,74 +1753,76 @@ export default function ProjectDashboard({
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 {/* Form */}
-                <form onSubmit={handleAddRisk} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3 self-start">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
-                    <Plus className="w-3.5 h-3.5 text-indigo-600" /> Identifier un Risque
-                  </h4>
+                {canEditCurrentModule && (
+                  <form onSubmit={handleAddRisk} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3 self-start">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
+                      <Plus className="w-3.5 h-3.5 text-indigo-600" /> Identifier un Risque
+                    </h4>
 
-                  <div className="space-y-2.5">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Description du Risque</label>
-                      <textarea
-                        rows={2}
-                        required
-                        placeholder="ex: Retard de livraison du fournisseur..."
-                        value={newRiskDesc}
-                        onChange={(e) => setNewRiskDesc(e.target.value)}
-                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2.5">
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Probabilité (1-5)</label>
-                        <select
-                          value={newRiskProb}
-                          onChange={(e) => setNewRiskProb(Number(e.target.value))}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-bold"
-                        >
-                          {[1, 2, 3, 4, 5].map((n) => (
-                            <option key={n} value={n}>{n}</option>
-                          ))}
-                        </select>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Description du Risque</label>
+                        <textarea
+                          rows={2}
+                          required
+                          placeholder="ex: Retard de livraison du fournisseur..."
+                          value={newRiskDesc}
+                          onChange={(e) => setNewRiskDesc(e.target.value)}
+                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Probabilité (1-5)</label>
+                          <select
+                            value={newRiskProb}
+                            onChange={(e) => setNewRiskProb(Number(e.target.value))}
+                            className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-bold"
+                          >
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Impact (1-5)</label>
+                          <select
+                            value={newRiskImpact}
+                            onChange={(e) => setNewRiskImpact(Number(e.target.value))}
+                            className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-bold"
+                          >
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Impact (1-5)</label>
-                        <select
-                          value={newRiskImpact}
-                          onChange={(e) => setNewRiskImpact(Number(e.target.value))}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-bold"
-                        >
-                          {[1, 2, 3, 4, 5].map((n) => (
-                            <option key={n} value={n}>{n}</option>
-                          ))}
-                        </select>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Plan de Migation / Action</label>
+                        <textarea
+                          rows={2}
+                          placeholder="Mesures préventives ou correctives..."
+                          value={newRiskMitigation}
+                          onChange={(e) => setNewRiskMitigation(e.target.value)}
+                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                        />
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Plan de Migation / Action</label>
-                      <textarea
-                        rows={2}
-                        placeholder="Mesures préventives ou correctives..."
-                        value={newRiskMitigation}
-                        onChange={(e) => setNewRiskMitigation(e.target.value)}
-                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded transition-colors shadow-2xs"
-                  >
-                    Consigner le Risque
-                  </button>
-                </form>
+                    <button
+                      type="submit"
+                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded transition-colors shadow-2xs cursor-pointer"
+                    >
+                      Consigner le Risque
+                    </button>
+                  </form>
+                )}
 
                 {/* Risk list */}
-                <div className="lg:col-span-2 space-y-3">
+                <div className={`${canEditCurrentModule ? 'lg:col-span-2' : 'lg:col-span-3'} space-y-3`}>
                   {risks.length === 0 ? (
                     <p className="text-xs text-slate-400 italic">Aucun risque identifié dans le registre.</p>
                   ) : (
@@ -1813,19 +1838,23 @@ export default function ProjectDashboard({
                               }`}>
                                 Score: {criticalVal} (P:{r.prob} × I:{r.impact})
                               </span>
-                              <button
-                                onClick={() => setEditingRisk({ ...r })}
-                                className="p-1 text-slate-400 hover:text-indigo-600"
-                                title="Modifier"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleRemoveRisk(r.id)}
-                                className="p-1 text-slate-400 hover:text-rose-600"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {canEditCurrentModule && (
+                                <>
+                                  <button
+                                    onClick={() => setEditingRisk({ ...r })}
+                                    className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"
+                                    title="Modifier"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleRemoveRisk(r.id)}
+                                    className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </div>
                           {r.mitigation && (
@@ -1875,106 +1904,110 @@ export default function ProjectDashboard({
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Forms */}
-                <div className="space-y-4">
-                  {/* Create group */}
-                  <form onSubmit={handleAddBudgetGroup} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">Créer un Poste / Groupe Budget</h4>
-                    <input
-                      type="text"
-                      required
-                      placeholder="ex: Prestations Externe"
-                      value={newBudgetGroupTitle}
-                      onChange={(e) => setNewBudgetGroupTitle(e.target.value)}
-                      className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                    />
-                    <button type="submit" className="w-full py-1.5 bg-slate-800 text-white font-bold text-xs rounded">
-                      Ajouter Poste
-                    </button>
-                  </form>
+                {canEditCurrentModule && (
+                  <div className="space-y-4">
+                    {/* Create group */}
+                    <form onSubmit={handleAddBudgetGroup} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">Créer un Poste / Groupe Budget</h4>
+                      <input
+                        type="text"
+                        required
+                        placeholder="ex: Prestations Externe"
+                        value={newBudgetGroupTitle}
+                        onChange={(e) => setNewBudgetGroupTitle(e.target.value)}
+                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                      />
+                      <button type="submit" className="w-full py-1.5 bg-slate-800 text-white font-bold text-xs rounded cursor-pointer">
+                        Ajouter Poste
+                      </button>
+                    </form>
 
-                  {/* Add expense line */}
-                  <form onSubmit={handleAddExpenseToGroup} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">Ajouter une Ligne de Dépense</h4>
-                    <select
-                      value={expenseGroupId}
-                      onChange={(e) => setExpenseGroupId(e.target.value)}
-                      className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                    >
-                      {budgetGroups.map((g) => (
-                        <option key={g.id} value={g.id}>{g.title}</option>
-                      ))}
-                    </select>
+                    {/* Add expense line */}
+                    <form onSubmit={handleAddExpenseToGroup} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">Ajouter une Ligne de Dépense</h4>
+                      <select
+                        value={expenseGroupId}
+                        onChange={(e) => setExpenseGroupId(e.target.value)}
+                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                      >
+                        {budgetGroups.map((g) => (
+                          <option key={g.id} value={g.id}>{g.title}</option>
+                        ))}
+                      </select>
 
-                    <input
-                      type="text"
-                      required
-                      placeholder="Intitulé de la dépense"
-                      value={expenseTitle}
-                      onChange={(e) => setExpenseTitle(e.target.value)}
-                      className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                    />
+                      <input
+                        type="text"
+                        required
+                        placeholder="Intitulé de la dépense"
+                        value={expenseTitle}
+                        onChange={(e) => setExpenseTitle(e.target.value)}
+                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                      />
 
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Qté</label>
-                        <input
-                          type="number"
-                          min={1}
-                          placeholder="Qté"
-                          value={expenseQuantity}
-                          onChange={(e) => setExpenseQuantity(e.target.value ? Number(e.target.value) : '')}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
-                        />
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Qté</label>
+                          <input
+                            type="number"
+                            min={1}
+                            placeholder="Qté"
+                            value={expenseQuantity}
+                            onChange={(e) => setExpenseQuantity(e.target.value ? Number(e.target.value) : '')}
+                            className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Prévu (€)</label>
+                          <input
+                            type="number"
+                            placeholder="Prévu (€)"
+                            value={expensePlanned}
+                            onChange={(e) => setExpensePlanned(e.target.value ? Number(e.target.value) : '')}
+                            className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Réel (€)</label>
+                          <input
+                            type="number"
+                            placeholder="Réel (€)"
+                            value={expenseSpent}
+                            onChange={(e) => setExpenseSpent(e.target.value ? Number(e.target.value) : '')}
+                            className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Prévu (€)</label>
-                        <input
-                          type="number"
-                          placeholder="Prévu (€)"
-                          value={expensePlanned}
-                          onChange={(e) => setExpensePlanned(e.target.value ? Number(e.target.value) : '')}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Réel (€)</label>
-                        <input
-                          type="number"
-                          placeholder="Réel (€)"
-                          value={expenseSpent}
-                          onChange={(e) => setExpenseSpent(e.target.value ? Number(e.target.value) : '')}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
-                        />
-                      </div>
-                    </div>
 
-                    <button type="submit" className="w-full py-2 bg-indigo-600 text-white font-bold text-xs rounded">
-                      Ajouter Ligne Dépense
-                    </button>
-                  </form>
-                </div>
+                      <button type="submit" className="w-full py-2 bg-indigo-600 text-white font-bold text-xs rounded cursor-pointer">
+                        Ajouter Ligne Dépense
+                      </button>
+                    </form>
+                  </div>
+                )}
 
                 {/* Groups list */}
-                <div className="lg:col-span-2 space-y-4">
+                <div className={`${canEditCurrentModule ? 'lg:col-span-2' : 'lg:col-span-3'} space-y-4`}>
                   {budgetGroups.map((group) => (
                     <div key={group.id} className="bg-slate-50/50 rounded-xl border border-slate-200 p-4 space-y-3">
                       <div className="flex justify-between items-center border-b border-slate-200 pb-2">
                         <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">{group.title}</h4>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => setEditingBudgetGroup(group)}
-                            className="p-1 text-slate-400 hover:text-indigo-600"
-                            title="Modifier"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleRemoveBudgetGroup(group.id)}
-                            className="p-1 text-slate-400 hover:text-rose-600"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        {canEditCurrentModule && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => setEditingBudgetGroup(group)}
+                              className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"
+                              title="Modifier"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleRemoveBudgetGroup(group.id)}
+                              className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <div className="space-y-1.5">
@@ -1993,18 +2026,22 @@ export default function ProjectDashboard({
                               <span className={exp.spent > exp.planned ? 'text-rose-600' : 'text-emerald-600'}>
                                 Réel: {formatEuro(exp.spent)}
                               </span>
-                              <button
-                                onClick={() => setEditingExpense({ groupId: group.id, expense: { ...exp } })}
-                                className="p-1 text-slate-400 hover:text-indigo-600"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleRemoveExpenseFromGroup(group.id, exp.id)}
-                                className="p-1 text-slate-400 hover:text-rose-600"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {canEditCurrentModule && (
+                                <>
+                                  <button
+                                    onClick={() => setEditingExpense({ groupId: group.id, expense: { ...exp } })}
+                                    className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleRemoveExpenseFromGroup(group.id, exp.id)}
+                                    className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -2047,76 +2084,78 @@ export default function ProjectDashboard({
               {commSubTab === 'meetings' ? (
                 <div className="space-y-6">
                   {/* Add Governance Meeting */}
-                  <form onSubmit={handleAddMeeting} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 max-w-2xl">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Programmer une Réunion / Événement</h4>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Titre de la réunion</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="ex: Comité de Pilotage Mensuel"
-                          value={meetingTitle}
-                          onChange={(e) => setMeetingTitle(e.target.value)}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fréquence / Type</label>
-                        <select
-                          value={meetingType}
-                          onChange={(e) => setMeetingType(e.target.value as any)}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-semibold"
-                        >
-                          <option value="one_time">Événement Ponctuel</option>
-                          <option value="recurring">Réunion Récurrente</option>
-                        </select>
-                      </div>
-
-                      {meetingType === 'recurring' && (
+                  {canEditCurrentModule && (
+                    <form onSubmit={handleAddMeeting} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 max-w-2xl">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Programmer une Réunion / Événement</h4>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Périodicité</label>
-                          <select
-                            value={meetingFrequency}
-                            onChange={(e) => setMeetingFrequency(e.target.value)}
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Titre de la réunion</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="ex: Comité de Pilotage Mensuel"
+                            value={meetingTitle}
+                            onChange={(e) => setMeetingTitle(e.target.value)}
                             className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fréquence / Type</label>
+                          <select
+                            value={meetingType}
+                            onChange={(e) => setMeetingType(e.target.value as any)}
+                            className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-semibold"
                           >
-                            <option value="Hebdomadaire">Hebdomadaire</option>
-                            <option value="Bimensuel">Bimensuel</option>
-                            <option value="Mensuel">Mensuel</option>
-                            <option value="2x par semaine">2x par semaine</option>
+                            <option value="one_time">Événement Ponctuel</option>
+                            <option value="recurring">Réunion Récurrente</option>
                           </select>
                         </div>
-                      )}
+
+                        {meetingType === 'recurring' && (
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Périodicité</label>
+                            <select
+                              value={meetingFrequency}
+                              onChange={(e) => setMeetingFrequency(e.target.value)}
+                              className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                            >
+                              <option value="Hebdomadaire">Hebdomadaire</option>
+                              <option value="Bimensuel">Bimensuel</option>
+                              <option value="Mensuel">Mensuel</option>
+                              <option value="2x par semaine">2x par semaine</option>
+                            </select>
+                          </div>
+                        )}
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Date</label>
+                          <input
+                            type="date"
+                            value={meetingDate}
+                            onChange={(e) => setMeetingDate(e.target.value)}
+                            className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                          />
+                        </div>
+                      </div>
 
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Date</label>
-                        <input
-                          type="date"
-                          value={meetingDate}
-                          onChange={(e) => setMeetingDate(e.target.value)}
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Objectifs & Ordre du Jour</label>
+                        <textarea
+                          rows={2}
+                          placeholder="Ordre du jour..."
+                          value={meetingObjectives}
+                          onChange={(e) => setMeetingObjectives(e.target.value)}
                           className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
                         />
                       </div>
-                    </div>
 
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Objectifs & Ordre du Jour</label>
-                      <textarea
-                        rows={2}
-                        placeholder="Ordre du jour..."
-                        value={meetingObjectives}
-                        onChange={(e) => setMeetingObjectives(e.target.value)}
-                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                      />
-                    </div>
-
-                    <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-bold text-xs rounded">
-                      Ajouter la réunion
-                    </button>
-                  </form>
+                      <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-bold text-xs rounded cursor-pointer">
+                        Ajouter la réunion
+                      </button>
+                    </form>
+                  )}
 
                   {/* List */}
                   <div className="space-y-2">
@@ -2133,20 +2172,22 @@ export default function ProjectDashboard({
                           <span className="text-[10px] text-slate-400 font-mono">Date: {formatDate(m.date)}</span>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setEditingMeeting(m)}
-                            className="p-1 text-slate-400 hover:text-indigo-600"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteMeeting(m.id)}
-                            className="p-1 text-slate-400 hover:text-rose-600"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        {canEditCurrentModule && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setEditingMeeting(m)}
+                              className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteMeeting(m.id)}
+                              className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -2154,59 +2195,61 @@ export default function ProjectDashboard({
               ) : (
                 <div className="space-y-6">
                   {/* Add Action form */}
-                  <form onSubmit={handleAddStaffComm} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 max-w-2xl">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Nouvelle Action de Communication</h4>
+                  {canEditCurrentModule && (
+                    <form onSubmit={handleAddStaffComm} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 max-w-2xl">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Nouvelle Action de Communication</h4>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <input
-                        type="text"
-                        required
-                        placeholder="Sujet / Action"
-                        value={commTitle}
-                        onChange={(e) => setCommTitle(e.target.value)}
-                        className="text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Audience Cible"
-                        value={commAudience}
-                        onChange={(e) => setCommAudience(e.target.value)}
-                        className="text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                      />
-                    </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <input
+                          type="text"
+                          required
+                          placeholder="Sujet / Action"
+                          value={commTitle}
+                          onChange={(e) => setCommTitle(e.target.value)}
+                          className="text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Audience Cible"
+                          value={commAudience}
+                          onChange={(e) => setCommAudience(e.target.value)}
+                          className="text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                        />
+                      </div>
 
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Contenu / Message rédigé</label>
-                      <textarea
-                        rows={3}
-                        placeholder="Saisissez le corps du message ou compte-rendu..."
-                        value={commMsgContent}
-                        onChange={(e) => setCommMsgContent(e.target.value)}
-                        className="w-full text-xs p-2.5 border border-slate-300 rounded bg-white"
-                      />
-                    </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Contenu / Message rédigé</label>
+                        <textarea
+                          rows={3}
+                          placeholder="Saisissez le corps du message ou compte-rendu..."
+                          value={commMsgContent}
+                          onChange={(e) => setCommMsgContent(e.target.value)}
+                          className="w-full text-xs p-2.5 border border-slate-300 rounded bg-white"
+                        />
+                      </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <input
-                        type="text"
-                        placeholder="Nom du fichier attaché"
-                        value={commAttachmentName}
-                        onChange={(e) => setCommAttachmentName(e.target.value)}
-                        className="text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                      />
-                      <input
-                        type="text"
-                        placeholder="URL de la pièce jointe"
-                        value={commAttachmentUrl}
-                        onChange={(e) => setCommAttachmentUrl(e.target.value)}
-                        className="text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                      />
-                    </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <input
+                          type="text"
+                          placeholder="Nom du fichier attaché"
+                          value={commAttachmentName}
+                          onChange={(e) => setCommAttachmentName(e.target.value)}
+                          className="text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                        />
+                        <input
+                          type="text"
+                          placeholder="URL de la pièce jointe"
+                          value={commAttachmentUrl}
+                          onChange={(e) => setCommAttachmentUrl(e.target.value)}
+                          className="text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                        />
+                      </div>
 
-                    <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-bold text-xs rounded">
-                      Enregistrer l'action
-                    </button>
-                  </form>
+                      <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-bold text-xs rounded cursor-pointer">
+                        Enregistrer l'action
+                      </button>
+                    </form>
+                  )}
 
                   {/* Actions list */}
                   <div className="space-y-3">
@@ -2216,29 +2259,32 @@ export default function ProjectDashboard({
                           <div className="flex items-center gap-2">
                             <input
                               type="checkbox"
+                              disabled={!canEditCurrentModule}
                               checked={c.status === 'sent'}
                               onChange={() => handleToggleCommDone(c.id, c.status)}
-                              className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                              className={`rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 ${!canEditCurrentModule ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}`}
                             />
                             <h5 className={`font-bold text-slate-900 ${c.status === 'sent' ? 'line-through text-slate-400' : ''}`}>
                               {c.title}
                             </h5>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => setEditingStaffComm(c)}
-                              className="p-1 text-slate-400 hover:text-indigo-600"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteStaffComm(c.id)}
-                              className="p-1 text-slate-400 hover:text-rose-600"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          {canEditCurrentModule && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setEditingStaffComm(c)}
+                                className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteStaffComm(c.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         {c.messageContent && (
@@ -2282,50 +2328,54 @@ export default function ProjectDashboard({
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <form onSubmit={handleAddKpi} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 self-start">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">Ajouter un KPI</h4>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Nom du KPI"
-                    value={kpiName}
-                    onChange={(e) => setKpiName(e.target.value)}
-                    className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                  />
-                  <div className="grid grid-cols-2 gap-2">
+                {canEditCurrentModule && (
+                  <form onSubmit={handleAddKpi} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 self-start">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">Ajouter un KPI</h4>
                     <input
                       type="text"
-                      placeholder="Valeur actuelle"
-                      value={kpiCurrent}
-                      onChange={(e) => setKpiCurrent(e.target.value)}
+                      required
+                      placeholder="Nom du KPI"
+                      value={kpiName}
+                      onChange={(e) => setKpiName(e.target.value)}
                       className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
                     />
-                    <input
-                      type="text"
-                      placeholder="Valeur cible"
-                      value={kpiTarget}
-                      onChange={(e) => setKpiTarget(e.target.value)}
-                      className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                    />
-                  </div>
-                  <button type="submit" className="w-full py-2 bg-indigo-600 text-white font-bold text-xs rounded">
-                    Consigner le KPI
-                  </button>
-                </form>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        placeholder="Valeur actuelle"
+                        value={kpiCurrent}
+                        onChange={(e) => setKpiCurrent(e.target.value)}
+                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Valeur cible"
+                        value={kpiTarget}
+                        onChange={(e) => setKpiTarget(e.target.value)}
+                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                      />
+                    </div>
+                    <button type="submit" className="w-full py-2 bg-indigo-600 text-white font-bold text-xs rounded cursor-pointer">
+                      Consigner le KPI
+                    </button>
+                  </form>
+                )}
 
-                <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className={`${canEditCurrentModule ? 'lg:col-span-2' : 'lg:col-span-3'} grid grid-cols-1 sm:grid-cols-2 gap-4`}>
                   {kpiList.map((k) => (
                     <div key={k.id} className="bg-white p-4 rounded-xl border border-slate-200 space-y-2 shadow-xs">
                       <div className="flex justify-between items-start">
                         <h5 className="text-xs font-bold text-slate-900">{k.name}</h5>
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => setEditingKpi(k)} className="p-1 text-slate-400 hover:text-indigo-600">
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => handleDeleteKpi(k.id)} className="p-1 text-slate-400 hover:text-rose-600">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        {canEditCurrentModule && (
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => setEditingKpi(k)} className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer">
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => handleDeleteKpi(k.id)} className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <div className="flex justify-between items-baseline font-mono">
                         <span className="text-xl font-bold text-indigo-700">{k.currentValue}</span>
@@ -2340,17 +2390,17 @@ export default function ProjectDashboard({
 
           {/* TAB 9: CLÔTURE */}
           {activeTab === 'close' && (
-            <ClosureTab project={project} onUpdateProject={updateProjectData} />
+            <ClosureTab project={project} onUpdateProject={updateProjectData} canEdit={canEditCurrentModule} />
           )}
 
           {/* TAB 10: REX */}
           {activeTab === 'rex' && (
-            <RexTab project={project} onUpdateProject={updateProjectData} />
+            <RexTab project={project} onUpdateProject={updateProjectData} canEdit={canEditCurrentModule} />
           )}
 
           {/* TAB 11: ESPACE DOCUMENTS */}
           {activeTab === 'docs' && (
-            <DocumentsTab project={project} onUpdateProject={updateProjectData} />
+            <DocumentsTab project={project} onUpdateProject={updateProjectData} canEdit={canEditCurrentModule} />
           )}
 
         </div>

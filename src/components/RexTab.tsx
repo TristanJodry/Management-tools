@@ -5,9 +5,10 @@ import { HeartHandshake, Plus, Trash2, Edit3, CheckCircle2, AlertTriangle, Light
 interface RexTabProps {
   project: Project;
   onUpdateProject: (updates: Partial<Project>) => void;
+  canEdit?: boolean;
 }
 
-export default function RexTab({ project, onUpdateProject }: RexTabProps) {
+export default function RexTab({ project, onUpdateProject, canEdit = true }: RexTabProps) {
   const rexItems: RexItem[] = project.rexItems || [];
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -79,12 +80,14 @@ export default function RexTab({ project, onUpdateProject }: RexTabProps) {
           </p>
         </div>
 
-        <button
-          onClick={() => setShowAddForm(true)}
-          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors shadow-xs flex items-center gap-1.5 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" /> Ajouter un Constat / REX
-        </button>
+        {canEdit && (
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors shadow-xs flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Ajouter un Constat / REX
+          </button>
+        )}
       </div>
 
       {rexItems.length === 0 ? (
@@ -119,22 +122,24 @@ export default function RexTab({ project, onUpdateProject }: RexTabProps) {
                   <div key={item.id} className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs space-y-2">
                     <div className="flex justify-between items-start">
                       <h5 className="text-xs font-bold text-slate-900">{item.title}</h5>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setEditingRex(item)}
-                          className="text-slate-400 hover:text-indigo-600 p-0.5"
-                          title="Modifier"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRex(item.id)}
-                          className="text-slate-400 hover:text-rose-600 p-0.5"
-                          title="Supprimer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      {canEdit && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setEditingRex(item)}
+                            className="text-slate-400 hover:text-indigo-600 p-0.5 cursor-pointer"
+                            title="Modifier"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteRex(item.id)}
+                            className="text-slate-400 hover:text-rose-600 p-0.5 cursor-pointer"
+                            title="Supprimer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                     {item.description && <p className="text-[11px] text-slate-600">{item.description}</p>}
                     <div className="flex justify-between items-center text-[10px] text-slate-400 border-t border-slate-100 pt-1.5">
@@ -162,20 +167,22 @@ export default function RexTab({ project, onUpdateProject }: RexTabProps) {
                   <div key={item.id} className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs space-y-2">
                     <div className="flex justify-between items-start">
                       <h5 className="text-xs font-bold text-slate-900">{item.title}</h5>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setEditingRex(item)}
-                          className="text-slate-400 hover:text-indigo-600 p-0.5"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRex(item.id)}
-                          className="text-slate-400 hover:text-rose-600 p-0.5"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      {canEdit && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setEditingRex(item)}
+                            className="text-slate-400 hover:text-indigo-600 p-0.5"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteRex(item.id)}
+                            className="text-slate-400 hover:text-rose-600 p-0.5"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                     {item.description && <p className="text-[11px] text-slate-600">{item.description}</p>}
                     {item.actionPlan && (
@@ -208,20 +215,22 @@ export default function RexTab({ project, onUpdateProject }: RexTabProps) {
                   <div key={item.id} className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs space-y-2">
                     <div className="flex justify-between items-start">
                       <h5 className="text-xs font-bold text-slate-900">{item.title}</h5>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setEditingRex(item)}
-                          className="text-slate-400 hover:text-indigo-600 p-0.5"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRex(item.id)}
-                          className="text-slate-400 hover:text-rose-600 p-0.5"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      {canEdit && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setEditingRex(item)}
+                            className="text-slate-400 hover:text-indigo-600 p-0.5"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteRex(item.id)}
+                            className="text-slate-400 hover:text-rose-600 p-0.5"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                     {item.description && <p className="text-[11px] text-slate-600">{item.description}</p>}
                     <div className="flex justify-between items-center text-[10px] text-slate-400 border-t border-slate-100 pt-1.5">
