@@ -4,12 +4,16 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Project, TeamMember } from './types';
+import { Project, TeamMember, UserAccount, UserGroup } from './types';
 import { INITIAL_PROJECTS, COMMON_TEMPLATES } from './data';
+import { DEFAULT_GROUPS, hasWritePermission } from './utils/permissions';
+import { ADMIN_CONFIG } from './config/adminConfig';
 import GlobalStats from './components/GlobalStats';
 import ProjectTable from './components/ProjectTable';
 import ProjectModal from './components/ProjectModal';
 import ProjectDashboard from './components/ProjectDashboard';
+import UserManagementModal from './components/UserManagementModal';
+import LoginModal from './components/LoginModal';
 import { 
   FolderKanban, 
   Plus, 
@@ -24,13 +28,45 @@ import {
   Trash2,
   AlertTriangle,
   Sun,
-  Moon
+  Moon,
+  Shield,
+  Lock,
+  LogOut,
+  UserCheck,
+  Key
 } from 'lucide-react';
 
 export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [globalTeam, setGlobalTeam] = useState<TeamMember[]>([]);
+
+  // RBAC & Auth state
+  const [userGroups, setUserGroups] = useState<UserGroup[]>(DEFAULT_GROUPS);
+  const [users, setUsers] = useState<UserAccount[]>([]);
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
+    const saved = localStorage.getItem('pm_app_current_user');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        // Fallback to Root Admin
+      }
+    }
+    return {
+      id: ADMIN_CONFIG.id,
+      username: ADMIN_CONFIG.username,
+      firstName: ADMIN_CONFIG.firstName,
+      lastName: ADMIN_CONFIG.lastName,
+      email: ADMIN_CONFIG.email,
+      role: ADMIN_CONFIG.role,
+      groupIds: [],
+      isAdmin: true
+    };
+  });
+
+  const [isUserMgmtModalOpen, setIsUserMgmtModalOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   
   // Dark mode state
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -46,6 +82,15 @@ export default function App() {
       localStorage.setItem('theme', 'light');
     }
   }, [isDarkMode]);
+
+  // Persist current logged in user
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('pm_app_current_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('pm_app_current_user');
+    }
+  }, [currentUser]);
   
   // Modals / Overlays
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -82,11 +127,27 @@ export default function App() {
         } else {
           loadFromLocalStorageTeam();
         }
+
+        if (data && Array.isArray(data.userGroups) && data.userGroups.length > 0) {
+          setUserGroups(data.userGroups);
+          localStorage.setItem('pm_app_user_groups', JSON.stringify(data.userGroups));
+        } else {
+          loadFromLocalStorageGroups();
+        }
+
+        if (data && Array.isArray(data.users)) {
+          setUsers(data.users);
+          localStorage.setItem('pm_app_users', JSON.stringify(data.users));
+        } else {
+          loadFromLocalStorageUsers();
+        }
       })
       .catch((err) => {
         console.warn('Could not fetch data from server, falling back to localStorage:', err);
         loadFromLocalStorageProjects();
         loadFromLocalStorageTeam();
+        loadFromLocalStorageGroups();
+        loadFromLocalStorageUsers();
       });
   }, []);
 
@@ -115,6 +176,56 @@ export default function App() {
     } else {
       setGlobalTeam([]);
     }
+  };
+
+  const loadFromLocalStorageGroups = () => {
+    const saved = localStorage.getItem('pm_app_user_groups');
+    if (saved) {
+      try {
+        setUserGroups(JSON.parse(saved));
+      } catch {
+        setUserGroups(DEFAULT_GROUPS);
+      }
+    } else {
+      setUserGroups(DEFAULT_GROUPS);
+      localStorage.setItem('pm_app_user_groups', JSON.stringify(DEFAULT_GROUPS));
+    }
+  };
+
+  const loadFromLocalStorageUsers = () => {
+    const saved = localStorage.getItem('pm_app_users');
+    if (saved) {
+      try {
+        setUsers(JSON.parse(saved));
+      } catch {
+        setUsers([]);
+      }
+    } else {
+      setUsers([]);
+    }
+  };
+
+  // Helper to save groups & users
+  const saveUserGroups = (updatedGroups: UserGroup[]) => {
+    setUserGroups(updatedGroups);
+    localStorage.setItem('pm_app_user_groups', JSON.stringify(updatedGroups));
+
+    fetch('/api/groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userGroups: updatedGroups })
+    }).catch((err) => console.error('Failed to sync groups to server:', err));
+  };
+
+  const saveUsers = (updatedUsers: UserAccount[]) => {
+    setUsers(updatedUsers);
+    localStorage.setItem('pm_app_users', JSON.stringify(updatedUsers));
+
+    fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ users: updatedUsers })
+    }).catch((err) => console.error('Failed to sync users to server:', err));
   };
 
   // Helper to save state on both server and client
@@ -199,12 +310,15 @@ export default function App() {
     alert(`Téléchargement du modèle de document : "${title}" (${size}) simulé avec succès.`);
   };
 
+  const canManageProjects = hasWritePermission(currentUser, userGroups, 'project_management');
+  const canManageTeam = hasWritePermission(currentUser, userGroups, 'team_management');
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-300">
       
       {/* GLOBAL HEADER BANNER */}
       <header className="bg-slate-900 text-white shadow-md border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col md:flex-row items-center justify-between gap-4">
           
           {/* Logo & Platform Name */}
           <div className="flex items-center gap-3">
@@ -216,60 +330,99 @@ export default function App() {
                 Gouvernance & Gestion de Projets
               </h1>
               <p className="text-[11px] text-slate-400 font-medium">
-                Plateforme de pilotage, arbitrage & suivi suivi de projet
+                Plateforme de pilotage, arbitrage & suivi de projet
               </p>
             </div>
           </div>
 
-          {/* Quick Access Actions */}
-          <div className="flex items-center gap-3">
+          {/* Quick Access Actions & Auth Profile */}
+          <div className="flex flex-wrap items-center justify-center md:justify-end gap-2.5">
+            
+            {/* User Account / Auth Badge */}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/90 rounded-xl border border-slate-700/80 text-xs">
+              <div className={`p-1 rounded-lg ${currentUser?.isAdmin ? 'bg-amber-500/20 text-amber-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                {currentUser?.isAdmin ? <Shield className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
+              </div>
+              <div>
+                <div className="flex items-center gap-1">
+                  <span className="font-bold text-slate-100">
+                    {currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'Invité'}
+                  </span>
+                  {currentUser?.isAdmin && (
+                    <span className="text-[9px] font-bold uppercase bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded border border-amber-500/30">
+                      ADMIN
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  {currentUser?.isAdmin
+                    ? 'Accès Root Administrateur'
+                    : currentUser?.groupIds && currentUser.groupIds.length > 0
+                    ? `Groupes : ${userGroups.filter(g => currentUser.groupIds.includes(g.id)).map(g => g.name).join(', ')}`
+                    : 'Abonné (Lecture Seule)'}
+                </p>
+              </div>
+
+              {currentUser?.isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setIsUserMgmtModalOpen(true)}
+                  className="ml-1 p-1 text-amber-400 hover:text-amber-200 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                  title="Gérer les droits et utilisateurs"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setIsLoginModalOpen(true)}
+                className="ml-1 px-2 py-1 text-[10px] font-bold text-slate-300 hover:text-white bg-slate-700/80 hover:bg-slate-700 rounded-lg border border-slate-600/80 transition-colors cursor-pointer"
+                title="Changer de compte ou se connecter"
+              >
+                Connexion
+              </button>
+            </div>
+
             {/* Dark mode toggle */}
             <button
               type="button"
               onClick={() => setIsDarkMode(prev => !prev)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700/80 rounded-lg border border-slate-700/80 transition-all cursor-pointer"
+              className="p-2 text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700/80 rounded-xl border border-slate-700/80 transition-all cursor-pointer"
               title={isDarkMode ? "Passer en mode clair" : "Passer en mode sombre"}
             >
-              {isDarkMode ? (
-                <>
-                  <Sun className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span className="hidden sm:inline">Mode Clair</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="w-4 h-4 text-indigo-400 shrink-0" />
-                  <span className="hidden sm:inline">Mode Sombre</span>
-                </>
-              )}
+              {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-400" />}
             </button>
 
             <button
               onClick={() => setIsTemplateOverlayOpen(true)}
-              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700/80 hover:text-white rounded-lg border border-slate-700/80 transition-all shadow-xs cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700/80 hover:text-white rounded-xl border border-slate-700/80 transition-all shadow-xs cursor-pointer"
             >
-              <BookOpen className="w-4 h-4 text-indigo-400" />
-              Référentiel Commun (Modèles)
+              <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+              Référentiel (Modèles)
             </button>
             
             {!selectedProjectId && (
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setIsTeamModalOpen(true)}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700/80 hover:text-white rounded-lg border border-slate-700/80 transition-all shadow-xs cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700/80 hover:text-white rounded-xl border border-slate-700/80 transition-all shadow-xs cursor-pointer"
                 >
-                  <Users className="w-4 h-4 text-emerald-400" />
+                  <Users className="w-3.5 h-3.5 text-emerald-400" />
                   Gérer l'Équipe
                 </button>
-                <button
-                  onClick={() => {
-                    setEditingProject(null);
-                    setIsModalOpen(true);
-                  }}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-lg shadow-sm transition-all cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  Nouveau Projet
-                </button>
+                {canManageProjects && (
+                  <button
+                    onClick={() => {
+                      setEditingProject(null);
+                      setIsModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-sm transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Nouveau Projet
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -285,6 +438,8 @@ export default function App() {
           <ProjectDashboard
             project={selectedProject}
             globalTeam={globalTeam}
+            currentUser={currentUser}
+            userGroups={userGroups}
             onBack={() => setSelectedProjectId(null)}
             onUpdateProject={(updatedProj) => {
               const updatedList = projects.map(p => p.id === updatedProj.id ? updatedProj : p);
@@ -314,6 +469,8 @@ export default function App() {
                 
                 <ProjectTable
                   projects={projects}
+                  canEdit={canManageProjects}
+                  canDelete={canManageProjects}
                   onSelectProject={(p) => setSelectedProjectId(p.id)}
                   onEditProject={(p) => {
                     setEditingProject(p);
@@ -565,7 +722,7 @@ export default function App() {
             <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
               <button
                 onClick={() => setIsTemplateOverlayOpen(false)}
-                className="w-full py-2 bg-slate-200 hover:bg-slate-300/80 text-slate-700 font-semibold rounded-lg text-xs transition-colors"
+                className="w-full py-2 bg-slate-200 hover:bg-slate-300/80 text-slate-700 font-semibold rounded-lg text-xs transition-colors cursor-pointer"
               >
                 Fermer le référentiel
               </button>
@@ -574,6 +731,26 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* USER MANAGEMENT & RBAC MODAL */}
+      <UserManagementModal
+        isOpen={isUserMgmtModalOpen}
+        onClose={() => setIsUserMgmtModalOpen(false)}
+        users={users}
+        userGroups={userGroups}
+        onSaveUsers={saveUsers}
+        onSaveGroups={saveUserGroups}
+      />
+
+      {/* AUTH LOGIN MODAL */}
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        adminUsername={ADMIN_CONFIG.username}
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+        }}
+      />
 
     </div>
   );

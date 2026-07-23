@@ -255,20 +255,42 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
                                 </span>
                               </div>
 
-                              {/* Subtitle line showing Assigned People & Predecessor */}
-                              <div className="flex flex-wrap items-center gap-2 mt-0.5 text-[10px] text-slate-400">
-                                {assignedNames && (
-                                  <span className="text-indigo-300 font-medium flex items-center gap-1 shrink-0">
-                                    <User className="w-2.5 h-2.5 text-indigo-400 inline" />
-                                    {assignedNames}
-                                  </span>
-                                )}
-                                {predecessorItem && (
-                                  <span className="text-slate-400 italic truncate shrink-0" title={`Prédécesseur: ${predecessorItem.name}`}>
-                                    (🔗 {predecessorItem.name})
-                                  </span>
-                                )}
-                              </div>
+                              {/* Calculate task duration & worked days */}
+                              {(() => {
+                                let duration = 1;
+                                if (item.startDate && item.endDate) {
+                                  const s = new Date(item.startDate);
+                                  const e = new Date(item.endDate);
+                                  if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+                                    const diffMs = e.getTime() - s.getTime();
+                                    duration = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1);
+                                  }
+                                } else if (item.estimatedDays) {
+                                  duration = item.estimatedDays;
+                                }
+                                const worked = Math.round((duration * (item.progress || 0) / 100) * 10) / 10;
+
+                                return (
+                                  <div className="flex flex-wrap items-center gap-2 mt-0.5 text-[10px] text-slate-400">
+                                    {assignedNames && (
+                                      <span className="text-indigo-300 font-medium flex items-center gap-1 shrink-0">
+                                        <User className="w-2.5 h-2.5 text-indigo-400 inline" />
+                                        {assignedNames}
+                                      </span>
+                                    )}
+                                    {item.type !== 'milestone' && (
+                                      <span className="text-emerald-400 font-semibold bg-slate-800 px-1.5 py-0.2 rounded border border-slate-700/80 shrink-0" title={`Charge: ${duration} j, Travaillés: ${worked} j`}>
+                                        ⏳ {worked}/{duration} j.
+                                      </span>
+                                    )}
+                                    {predecessorItem && (
+                                      <span className="text-slate-400 italic truncate shrink-0" title={`Prédécesseur: ${predecessorItem.name}`}>
+                                        (🔗 {predecessorItem.name})
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
 
@@ -301,23 +323,40 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
                                 </button>
                               </div>
                             ) : (
-                              <div
-                                style={{
-                                  left: `${pos.leftPct}%`,
-                                  width: `${pos.widthPct}%`
-                                }}
-                                className={`absolute z-10 h-5.5 rounded-md border shadow-xs overflow-hidden flex items-center justify-center transition-all ${
-                                  item.completed || item.progress === 100
-                                    ? 'bg-emerald-600/90 border-emerald-500 text-white'
-                                    : 'bg-indigo-600/90 border-indigo-400 text-white'
-                                }`}
-                                title={`${item.name} (${formatShortDate(item.startDate)} → ${formatShortDate(item.endDate)}) : ${item.progress || 0}%`}
-                              >
-                                {/* Percentage ONLY - NO TASK NAME inside bar */}
-                                <span className="text-[10px] font-bold font-mono px-1">
-                                  {item.progress || 0}%
-                                </span>
-                              </div>
+                              (() => {
+                                let duration = 1;
+                                if (item.startDate && item.endDate) {
+                                  const s = new Date(item.startDate);
+                                  const e = new Date(item.endDate);
+                                  if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+                                    const diffMs = e.getTime() - s.getTime();
+                                    duration = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1);
+                                  }
+                                } else if (item.estimatedDays) {
+                                  duration = item.estimatedDays;
+                                }
+                                const worked = Math.round((duration * (item.progress || 0) / 100) * 10) / 10;
+
+                                return (
+                                  <div
+                                    style={{
+                                      left: `${pos.leftPct}%`,
+                                      width: `${pos.widthPct}%`
+                                    }}
+                                    className={`absolute z-10 h-5.5 rounded-md border shadow-xs overflow-hidden flex items-center justify-center transition-all ${
+                                      item.completed || item.progress === 100
+                                        ? 'bg-emerald-600/90 border-emerald-500 text-white'
+                                        : 'bg-indigo-600/90 border-indigo-400 text-white'
+                                    }`}
+                                    title={`${item.name} (${formatShortDate(item.startDate)} → ${formatShortDate(item.endDate)}) : ${worked} / ${duration} j. travaillés (${item.progress || 0}%)`}
+                                  >
+                                    {/* Percentage ONLY - NO TASK NAME inside bar */}
+                                    <span className="text-[10px] font-bold font-mono px-1">
+                                      {item.progress || 0}%
+                                    </span>
+                                  </div>
+                                );
+                              })()
                             )}
                           </div>
                         </div>

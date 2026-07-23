@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import type { Database as SqlDatabase } from 'sql.js';
+import { ADMIN_CONFIG } from './src/config/adminConfig';
 
 // Safe determination of current directory & project root
 function getDir(): { currentDir: string; projectRoot: string } {
@@ -77,6 +78,16 @@ async function initDatabase() {
         updated_at TEXT
       );
       CREATE TABLE IF NOT EXISTS global_team (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL,
+        updated_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS user_groups (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL,
+        updated_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         data TEXT NOT NULL,
         updated_at TEXT
@@ -243,27 +254,165 @@ function saveTeamToDb(team: any[]): boolean {
   }
 }
 
+function getAllGroups(): any[] {
+  if (!db) {
+    try {
+      if (fs.existsSync(JSON_FILE)) {
+        const raw = fs.readFileSync(JSON_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed.userGroups) ? parsed.userGroups : [];
+      }
+    } catch {
+      return [];
+    }
+    return [];
+  }
+
+  try {
+    const stmt = db.prepare('SELECT data FROM user_groups');
+    const results: any[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      if (row.data) {
+        results.push(JSON.parse(row.data as string));
+      }
+    }
+    stmt.free();
+    return results;
+  } catch (err) {
+    console.error('Erreur lecture groupes :', err);
+    return [];
+  }
+}
+
+function saveGroupsToDb(groups: any[]): boolean {
+  if (!db) {
+    try {
+      let current = { projects: [], globalTeam: [], userGroups: [], users: [] };
+      if (fs.existsSync(JSON_FILE)) {
+        current = JSON.parse(fs.readFileSync(JSON_FILE, 'utf-8'));
+      }
+      current.userGroups = groups as any;
+      fs.writeFileSync(JSON_FILE, JSON.stringify(current, null, 2), 'utf-8');
+      return true;
+    } catch (err) {
+      console.error('Erreur sauvegarde groupes JSON :', err);
+      return false;
+    }
+  }
+
+  try {
+    db.run('DELETE FROM user_groups');
+    const now = new Date().toISOString();
+    for (const g of groups) {
+      db.run('INSERT INTO user_groups (id, data, updated_at) VALUES (?, ?, ?)', [
+        g.id || `grp-${Date.now()}`,
+        JSON.stringify(g),
+        now,
+      ]);
+    }
+    saveSqliteFile();
+    return true;
+  } catch (err) {
+    console.error('Erreur sauvegarde groupes BDD :', err);
+    return false;
+  }
+}
+
+function getAllUsers(): any[] {
+  if (!db) {
+    try {
+      if (fs.existsSync(JSON_FILE)) {
+        const raw = fs.readFileSync(JSON_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed.users) ? parsed.users : [];
+      }
+    } catch {
+      return [];
+    }
+    return [];
+  }
+
+  try {
+    const stmt = db.prepare('SELECT data FROM users');
+    const results: any[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      if (row.data) {
+        results.push(JSON.parse(row.data as string));
+      }
+    }
+    stmt.free();
+    return results;
+  } catch (err) {
+    console.error('Erreur lecture utilisateurs :', err);
+    return [];
+  }
+}
+
+function saveUsersToDb(users: any[]): boolean {
+  if (!db) {
+    try {
+      let current = { projects: [], globalTeam: [], userGroups: [], users: [] };
+      if (fs.existsSync(JSON_FILE)) {
+        current = JSON.parse(fs.readFileSync(JSON_FILE, 'utf-8'));
+      }
+      current.users = users as any;
+      fs.writeFileSync(JSON_FILE, JSON.stringify(current, null, 2), 'utf-8');
+      return true;
+    } catch (err) {
+      console.error('Erreur sauvegarde utilisateurs JSON :', err);
+      return false;
+    }
+  }
+
+  try {
+    db.run('DELETE FROM users');
+    const now = new Date().toISOString();
+    for (const u of users) {
+      db.run('INSERT INTO users (id, data, updated_at) VALUES (?, ?, ?)', [
+        u.id || `usr-${Date.now()}`,
+        JSON.stringify(u),
+        now,
+      ]);
+    }
+    saveSqliteFile();
+    return true;
+  } catch (err) {
+    console.error('Erreur sauvegarde utilisateurs BDD :', err);
+    return false;
+  }
+}
+
 // API Routes
 app.get('/api/data', (_req, res) => {
   const projects = getAllProjects();
   const globalTeam = getAllTeam();
-  res.json({ projects, globalTeam });
+  const userGroups = getAllGroups();
+  const users = getAllUsers();
+  res.json({ projects, globalTeam, userGroups, users });
 });
 
 app.post('/api/data', (req, res) => {
-  const { projects, globalTeam } = req.body;
+  const { projects, globalTeam, userGroups, users } = req.body;
   let pOk = true;
   let tOk = true;
+  let gOk = true;
+  let uOk = true;
 
-  if (Array.isArray(projects)) {
-    pOk = saveProjectsToDb(projects);
-  }
-  if (Array.isArray(globalTeam)) {
-    tOk = saveTeamToDb(globalTeam);
-  }
+  if (Array.isArray(projects)) pOk = saveProjectsToDb(projects);
+  if (Array.isArray(globalTeam)) tOk = saveTeamToDb(globalTeam);
+  if (Array.isArray(userGroups)) gOk = saveGroupsToDb(userGroups);
+  if (Array.isArray(users)) uOk = saveUsersToDb(users);
 
-  if (pOk && tOk) {
-    res.json({ success: true, projects: getAllProjects(), globalTeam: getAllTeam() });
+  if (pOk && tOk && gOk && uOk) {
+    res.json({
+      success: true,
+      projects: getAllProjects(),
+      globalTeam: getAllTeam(),
+      userGroups: getAllGroups(),
+      users: getAllUsers()
+    });
   } else {
     res.status(500).json({ error: 'Échec de sauvegarde des données' });
   }
@@ -291,6 +440,81 @@ app.post('/api/team', (req, res) => {
   } else {
     res.status(500).json({ error: 'Échec sauvegarde de l\'équipe' });
   }
+});
+
+app.get('/api/groups', (_req, res) => {
+  res.json({ userGroups: getAllGroups() });
+});
+
+app.post('/api/groups', (req, res) => {
+  const { userGroups } = req.body;
+  if (!Array.isArray(userGroups)) {
+    return res.status(400).json({ error: 'userGroups doit être un tableau' });
+  }
+  if (saveGroupsToDb(userGroups)) {
+    res.json({ success: true, userGroups: getAllGroups() });
+  } else {
+    res.status(500).json({ error: 'Échec sauvegarde des groupes' });
+  }
+});
+
+app.get('/api/users', (_req, res) => {
+  res.json({ users: getAllUsers() });
+});
+
+app.post('/api/users', (req, res) => {
+  const { users } = req.body;
+  if (!Array.isArray(users)) {
+    return res.status(400).json({ error: 'users doit être un tableau' });
+  }
+  if (saveUsersToDb(users)) {
+    res.json({ success: true, users: getAllUsers() });
+  } else {
+    res.status(500).json({ error: 'Échec sauvegarde des utilisateurs' });
+  }
+});
+
+app.get('/api/auth/admin-info', (_req, res) => {
+  res.json({
+    username: ADMIN_CONFIG.username,
+    firstName: ADMIN_CONFIG.firstName,
+    lastName: ADMIN_CONFIG.lastName,
+    email: ADMIN_CONFIG.email,
+    role: ADMIN_CONFIG.role
+  });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Identifiant et mot de passe requis' });
+  }
+
+  // 1. Check Root Admin credentials from ADMIN_CONFIG
+  if (username === ADMIN_CONFIG.username && password === ADMIN_CONFIG.password) {
+    const adminUser = {
+      id: ADMIN_CONFIG.id,
+      username: ADMIN_CONFIG.username,
+      firstName: ADMIN_CONFIG.firstName,
+      lastName: ADMIN_CONFIG.lastName,
+      email: ADMIN_CONFIG.email,
+      role: ADMIN_CONFIG.role,
+      groupIds: [],
+      isAdmin: true
+    };
+    return res.json({ success: true, user: adminUser });
+  }
+
+  // 2. Check stored users
+  const users = getAllUsers();
+  const user = users.find((u) => u.username?.toLowerCase() === username.toLowerCase() && u.password === password);
+
+  if (user) {
+    const { password: _, ...userWithoutPassword } = user;
+    return res.json({ success: true, user: userWithoutPassword });
+  }
+
+  return res.status(401).json({ error: 'Identifiant ou mot de passe incorrect' });
 });
 
 app.get('/api/health', (_req, res) => {

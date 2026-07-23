@@ -230,3 +230,39 @@ export interface ProjectDocument {
   fileSize: string;
   uploadedBy: string;
 }
+
+export type ModuleKey =
+  | 'project_management'
+  | 'team_management'
+  | 'charter'
+  | 'gantt'
+  | 'workload'
+  | 'budget'
+  | 'risks'
+  | 'governance'
+  | 'decision'
+  | 'kpis'
+  | 'rex'
+  | 'documents'
+  | 'closure'
+  | 'templates';
+
+export interface UserGroup {
+  id: string;
+  name: string;
+  description: string;
+  permissions: Record<ModuleKey, boolean>;
+}
+
+export interface UserAccount {
+  id: string;
+  username: string;
+  password?: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: string;
+  groupIds: string[];
+  isAdmin?: boolean;
+}
+

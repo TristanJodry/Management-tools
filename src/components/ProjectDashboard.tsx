@@ -11,8 +11,12 @@ import {
   StaffCommunication,
   GovernanceMeeting,
   DecisionItem,
-  StakeholderGroup
+  StakeholderGroup,
+  UserAccount,
+  UserGroup,
+  ModuleKey
 } from '../types';
+import { hasWritePermission } from '../utils/permissions';
 import { 
   ArrowLeft, 
   Calendar, 
@@ -68,13 +72,17 @@ interface ProjectDashboardProps {
   globalTeam: TeamMember[];
   onBack: () => void;
   onUpdateProject: (updatedProject: Project) => void;
+  currentUser?: UserAccount | null;
+  userGroups?: UserGroup[];
 }
 
 export default function ProjectDashboard({
   project,
   globalTeam,
   onBack,
-  onUpdateProject
+  onUpdateProject,
+  currentUser = null,
+  userGroups = []
 }: ProjectDashboardProps) {
 
   // --- CORE TABS NAVIGATION ---
@@ -87,6 +95,24 @@ export default function ProjectDashboard({
 
   // Sub-tabs for Planification
   const [planificationSubTab, setPlanificationSubTab] = useState<'gantt' | 'workload'>('gantt');
+
+  // Permission check for active tab / module
+  const getActiveModuleKey = (): ModuleKey => {
+    if (activeTab === 'stakeholders') return 'charter';
+    if (activeTab === 'planification') return planificationSubTab === 'workload' ? 'workload' : 'gantt';
+    if (activeTab === 'budget') return 'budget';
+    if (activeTab === 'risks') return 'risks';
+    if (activeTab === 'communication') return 'governance';
+    if (activeTab === 'decisionMatrix') return 'decision';
+    if (activeTab === 'kpis') return 'kpis';
+    if (activeTab === 'rex') return 'rex';
+    if (activeTab === 'docs') return 'documents';
+    if (activeTab === 'close') return 'closure';
+    return 'charter';
+  };
+
+  const activeModuleKey = getActiveModuleKey();
+  const canEditCurrentModule = hasWritePermission(currentUser, userGroups, activeModuleKey);
 
   // Sub-tabs for Communication
   const [commSubTab, setCommSubTab] = useState<'meetings' | 'actions'>('meetings');
@@ -835,6 +861,21 @@ export default function ProjectDashboard({
   return (
     <div className="space-y-6">
       
+      {/* Read-Only Notice Banner */}
+      {!canEditCurrentModule && (
+        <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 rounded-xl text-amber-800 dark:text-amber-200 text-xs flex items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2">
+            <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span>
+              <strong>Mode Lecture Seule :</strong> Vous n'avez pas les droits d'écriture sur l'outil <strong>{activeModuleKey}</strong> avec votre compte / groupe actuel.
+            </span>
+          </div>
+          <span className="text-[10px] font-bold uppercase bg-amber-200/60 dark:bg-amber-900/60 text-amber-900 dark:text-amber-100 px-2 py-0.5 rounded">
+            Consultation uniquement
+          </span>
+        </div>
+      )}
+
       {/* 1. Header with Back Button & Title */}
       <div className="bg-white p-6 rounded-xl border border-slate-200/80 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -2521,18 +2562,18 @@ export default function ProjectDashboard({
 
               {editingGanttItem.item.type === 'task' && (
                 <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Progression ({editingGanttItem.item.progress}%)</label>
+                  <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Progression ({editingGanttItem.item.progress || 0}%)</label>
                   <input
                     type="range"
                     min={0}
                     max={100}
                     step={5}
-                    value={editingGanttItem.item.progress}
+                    value={editingGanttItem.item.progress || 0}
                     onChange={(e) => setEditingGanttItem({
                       ...editingGanttItem,
                       item: { ...editingGanttItem.item, progress: Number(e.target.value) }
                     })}
-                    className="w-full accent-indigo-600"
+                    className="w-full accent-indigo-600 cursor-pointer"
                   />
                 </div>
               )}

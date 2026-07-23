@@ -25,13 +25,17 @@ interface ProjectTableProps {
   onSelectProject: (project: Project) => void;
   onEditProject: (project: Project) => void;
   onDeleteProject: (projectId: string) => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
 export default function ProjectTable({ 
   projects, 
   onSelectProject, 
   onEditProject, 
-  onDeleteProject 
+  onDeleteProject,
+  canEdit = true,
+  canDelete = true
 }: ProjectTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -327,24 +331,28 @@ export default function ProjectTable({
                         <button
                           onClick={() => onSelectProject(project)}
                           title="Ouvrir le Tableau de Bord"
-                          className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-colors"
+                          className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-colors cursor-pointer"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => onEditProject(project)}
-                          title="Modifier le projet"
-                          className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => onDeleteProject(project.id)}
-                          title="Supprimer le projet"
-                          className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => onEditProject(project)}
+                            title="Modifier le projet"
+                            className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={() => onDeleteProject(project.id)}
+                            title="Supprimer le projet"
+                            className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
