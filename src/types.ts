@@ -36,12 +36,13 @@ export interface GanttItem {
   id: string;
   type: 'task' | 'milestone'; // tâche ou jalon/livrable
   name: string;
-  assignedTo?: string; // TeamMember ID
+  assignedTo?: string[]; // Array of TeamMember IDs
   startDate: string;
   endDate: string;
   progress: number; // 0 to 100
   completed: boolean;
   predecessorId?: string; // ID of preceding task/milestone
+  estimatedDays?: number;
 }
 
 export interface GanttPhase {
@@ -53,9 +54,10 @@ export interface GanttPhase {
 export interface BudgetExpense {
   id: string;
   name: string;
-  quantity: number;
-  unitPricePlanned: number;
-  unitPriceSpent: number;
+  title?: string;
+  quantity?: number;
+  unitPricePlanned?: number;
+  unitPriceSpent?: number;
   planned: number;
   spent: number;
 }
@@ -63,24 +65,105 @@ export interface BudgetExpense {
 export interface BudgetGroup {
   id: string;
   name: string;
+  title?: string;
   expenses: BudgetExpense[];
 }
 
 export interface StaffCommunication {
   id: string;
   title: string;
-  targetAudience: string;
+  targetAudience?: string;
+  audience?: string;
   date: string;
-  status: 'planned' | 'done' | 'delayed';
+  status: 'planned' | 'done' | 'delayed' | 'sent';
+  messageContent?: string;
+  attachmentName?: string;
+  attachmentUrl?: string;
+}
+
+export interface GovernanceMeeting {
+  id: string;
+  title: string;
+  objectives: string;
+  status: 'planned' | 'done' | 'delayed' | 'scheduled';
+  type?: 'one_time' | 'recurring';
+  date?: string;
+  frequency?: string; // e.g. 'Hebdomadaire', 'Bimensuel', 'Mensuel', '2x par semaine'
+}
+
+export interface DecisionCriterion {
+  id: string;
+  name: string;
+  weight: number; // 1 to 5
+}
+
+export interface DecisionOption {
+  id: string;
+  name: string;
+  scores: Record<string, number>; // criterionId -> score (0-10)
+  notes?: string;
+}
+
+export interface DecisionItem {
+  id: string;
+  title: string;
+  description: string;
+  status: 'draft' | 'under_review' | 'approved' | 'rejected';
+  date: string;
+  criteria: DecisionCriterion[];
+  options: DecisionOption[];
+  selectedOptionId?: string;
+}
+
+export interface TeamCharter {
+  values: string;
+  rules: string;
+  commitments: string;
+  decisionRules: string;
+}
+
+export interface ProjectClosureData {
+  deliverablesValidated: boolean;
+  acceptanceSigned: boolean;
+  supportTransferred: boolean;
+  accessRevoked: boolean;
+  finalSummary: string;
+  signoffName: string;
+  signoffRole: string;
+  signoffDate: string;
+  isClosed: boolean;
+}
+
+export interface RexItem {
+  id: string;
+  category: 'success' | 'issue' | 'recommendation';
+  title: string;
+  description: string;
+  author: string;
+  impact: 'low' | 'medium' | 'high';
+  actionPlan?: string;
+}
+
+export interface ProjectDocumentItem {
+  id: string;
+  name: string;
+  category: string;
+  version: string;
+  uploadedAt: string;
+  fileSize: string;
+  uploadedBy: string;
+  notes?: string;
+  fileUrl?: string;
 }
 
 export interface Kpi {
   id: string;
   name: string;
-  metricType: 'percent' | 'time' | 'date' | 'text' | 'number';
+  metricType: 'percent' | 'time' | 'date' | 'text' | 'number' | 'percentage' | 'currency';
   currentValue: string;
   targetValue: string;
-  status: number; // percentage of compliance (0-100)
+  status?: number; // percentage of compliance (0-100)
+  statusScore?: 'ok' | 'warning' | 'alert';
 }
 
 export interface Project {
@@ -113,15 +196,22 @@ export interface Project {
   // Rich modules structures
   stakeholders?: Stakeholder[];
   stakeholderGroups?: StakeholderGroup[];
+  teamCharter?: TeamCharter;
+  decisionMatrix?: DecisionItem[];
   ganttPhases?: GanttPhase[];
   customRaciRows?: string[];
   budgetGroups?: BudgetGroup[];
   kpis?: Kpi[];
   staffCommunications?: StaffCommunication[];
   raciAssignments?: { rowName: string; assignments: Record<string, string> }[];
-  meetings?: { id: string; title: string; date: string; objectives: string; status: 'planned' | 'done' | 'delayed' }[];
+  meetings?: GovernanceMeeting[];
+  governanceMeetings?: GovernanceMeeting[];
   meetingSchedule?: { frequency: string; dayOfWeek?: string; time?: string };
-  risks?: { id: string; desc: string; prob: number; impact: number; mitigation: string }[];
+  risks?: { id: string; desc: string; prob: number; impact: number; mitigation: string; owner?: string }[];
+  risksRegister?: { id: string; desc: string; prob: number; impact: number; mitigation: string; owner?: string }[];
+  closureData?: ProjectClosureData;
+  rexItems?: RexItem[];
+  projectDocuments?: ProjectDocumentItem[];
 }
 
 export interface CommonTemplate {

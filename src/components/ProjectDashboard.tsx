@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState, useEffect } from 'react';
 import { 
   Project, 
@@ -13,7 +8,10 @@ import {
   BudgetGroup, 
   BudgetExpense, 
   Kpi, 
-  StaffCommunication 
+  StaffCommunication,
+  GovernanceMeeting,
+  DecisionItem,
+  StakeholderGroup
 } from '../types';
 import { 
   ArrowLeft, 
@@ -49,8 +47,19 @@ import {
   Send,
   Eye,
   EyeOff,
-  X
+  X,
+  Edit3,
+  Copy,
+  Paperclip,
+  RotateCw
 } from 'lucide-react';
+
+import TeamCharterTab from './TeamCharterTab';
+import DecisionMatrixTab from './DecisionMatrixTab';
+import WorkloadTab from './WorkloadTab';
+import ClosureTab from './ClosureTab';
+import RexTab from './RexTab';
+import DocumentsTab from './DocumentsTab';
 
 interface ProjectDashboardProps {
   project: Project;
@@ -59,75 +68,71 @@ interface ProjectDashboardProps {
   onUpdateProject: (updatedProject: Project) => void;
 }
 
-export default function ProjectDashboard({ 
-  project, 
-  globalTeam, 
-  onBack, 
-  onUpdateProject 
+export default function ProjectDashboard({
+  project,
+  globalTeam,
+  onBack,
+  onUpdateProject
 }: ProjectDashboardProps) {
-  
-  // Tab Management (Order specified by user)
+
+  // --- CORE TABS NAVIGATION ---
   const [activeTab, setActiveTab] = useState<
-    'stakeholders' | 'planification' | 'organisation' | 'risks' | 'budget' | 'communication' | 'kpis' | 'close' | 'rex' | 'docs'
+    'stakeholders' | 'decisionMatrix' | 'planification' | 'organisation' | 'risks' | 'budget' | 'communication' | 'kpis' | 'close' | 'rex' | 'docs'
   >('stakeholders');
 
+  // Sub-tabs for Stakeholders
+  const [stakeholderSubTab, setStakeholderSubTab] = useState<'list' | 'charter'>('list');
+
   // Sub-tabs for Planification
-  const [planSubTab, setPlanSubTab] = useState<'gantt' | 'wbs'>('gantt');
+  const [planificationSubTab, setPlanificationSubTab] = useState<'gantt' | 'workload'>('gantt');
 
-  // Local synced lists
-  const [stakeholders, setStakeholders] = useState<Stakeholder[]>([]);
-  const [stakeholderGroups, setStakeholderGroups] = useState<any[]>([]);
-  const [ganttPhases, setGanttPhases] = useState<GanttPhase[]>([]);
-  const [customRaciRows, setCustomRaciRows] = useState<string[]>([]);
-  const [budgetGroups, setBudgetGroups] = useState<BudgetGroup[]>([]);
-  const [kpis, setKpis] = useState<Kpi[]>([]);
-  const [staffCommunications, setStaffCommunications] = useState<StaffCommunication[]>([]);
-  const [risks, setRisks] = useState<{ id: string; desc: string; prob: number; impact: number; mitigation: string }[]>([]);
-  const [meetings, setMeetings] = useState<{ id: string; title: string; date: string; objectives: string; status: 'planned' | 'done' | 'delayed' }[]>([]);
-  const [raciAssignments, setRaciAssignments] = useState<Record<string, Record<string, string>>>({});
-  const [hiddenRaciRows, setHiddenRaciRows] = useState<string[]>([]);
-  const [showHiddenInRaci, setShowHiddenInRaci] = useState<boolean>(false);
+  // Sub-tabs for Communication
+  const [commSubTab, setCommSubTab] = useState<'meetings' | 'actions'>('meetings');
 
-  // Load state when project ID changes
-  useEffect(() => {
-    setStakeholders(project.stakeholders || []);
-    
-    // Manage stakeholder groups
-    let loadedGroups = project.stakeholderGroups || [];
-    setStakeholderGroups(loadedGroups);
-
-    setGanttPhases(project.ganttPhases || []);
-    setCustomRaciRows(project.customRaciRows || []);
-    setBudgetGroups(project.budgetGroups || []);
-    setKpis(project.kpis || []);
-    setStaffCommunications(project.staffCommunications || []);
-    setRisks(project.risks || []);
-    setMeetings(project.meetings || []);
-    
-    // Load RACI assignments map
-    const initialRaci: Record<string, Record<string, string>> = {};
+  // Local state synced with project
+  const [stakeholderGroups, setStakeholderGroups] = useState<StakeholderGroup[]>(
+    project.stakeholderGroups || []
+  );
+  const [ganttPhases, setGanttPhases] = useState<GanttPhase[]>(project.ganttPhases || []);
+  const [customRaciRows, setCustomRaciRows] = useState<string[]>(project.customRaciRows || []);
+  const [raciAssignments, setRaciAssignments] = useState<Record<string, Record<string, string>>>(() => {
+    const init: Record<string, Record<string, string>> = {};
     if (project.raciAssignments) {
-      project.raciAssignments.forEach(item => {
-        initialRaci[item.rowName] = item.assignments;
+      project.raciAssignments.forEach((item) => {
+        init[item.rowName] = item.assignments || {};
       });
     }
-    setRaciAssignments(initialRaci);
-  }, [project.id]);
+    return init;
+  });
+  const [risks, setRisks] = useState(project.risksRegister || []);
+  const [budgetGroups, setBudgetGroups] = useState<BudgetGroup[]>(project.budgetGroups || []);
+  const [kpiList, setKpiList] = useState<Kpi[]>(project.kpis || []);
+  const [staffComms, setStaffComms] = useState<StaffCommunication[]>(project.staffCommunications || []);
+  const [governanceMeetings, setGovernanceMeetings] = useState<GovernanceMeeting[]>(project.governanceMeetings || []);
 
-  // Synchronize and update parent project state
+  useEffect(() => {
+    setStakeholderGroups(project.stakeholderGroups || []);
+    setGanttPhases(project.ganttPhases || []);
+    setCustomRaciRows(project.customRaciRows || []);
+    setRisks(project.risksRegister || []);
+    setBudgetGroups(project.budgetGroups || []);
+    setKpiList(project.kpis || []);
+    setStaffComms(project.staffCommunications || []);
+    setGovernanceMeetings(project.governanceMeetings || []);
+  }, [project]);
+
+  // Helper sync with parent
   const updateProjectData = (updates: Partial<Project>) => {
     const currentGantt = updates.ganttPhases !== undefined ? updates.ganttPhases : ganttPhases;
     const currentBudget = updates.budgetGroups !== undefined ? updates.budgetGroups : budgetGroups;
     const currentGroups = updates.stakeholderGroups !== undefined ? updates.stakeholderGroups : stakeholderGroups;
 
-    // Flatten stakeholderGroups to flat list of stakeholders for legacy support
-    const flatStakeholders = currentGroups.flatMap(g => g.stakeholders || []);
+    const flatStakeholders = currentGroups.flatMap((g) => g.stakeholders || []);
 
-    // Calculate total tasks and completed ones
     let totalTasks = 0;
     let completedTasks = 0;
-    currentGantt.forEach(phase => {
-      phase.items.forEach(item => {
+    currentGantt.forEach((phase) => {
+      phase.items.forEach((item) => {
         totalTasks++;
         if (item.type === 'task') {
           if (item.progress === 100) completedTasks++;
@@ -137,17 +142,13 @@ export default function ProjectDashboard({
       });
     });
 
-    // Calculate dynamic budget sums from groups
-    let totalBudget = 0;
     let totalSpent = 0;
-    currentBudget.forEach(group => {
-      group.expenses.forEach(exp => {
-        totalBudget += exp.planned;
+    currentBudget.forEach((group) => {
+      group.expenses.forEach((exp) => {
         totalSpent += exp.spent;
       });
     });
 
-    // Re-format RACI assignments as array for saving
     const finalRaciArray = Object.entries(raciAssignments).map(([rowName, assignments]) => ({
       rowName,
       assignments: assignments as Record<string, string>
@@ -160,25 +161,29 @@ export default function ProjectDashboard({
       stakeholders: flatStakeholders,
       tasksCompleted: totalTasks > 0 ? completedTasks : project.tasksCompleted,
       tasksTotal: totalTasks > 0 ? totalTasks : project.tasksTotal,
-      budget: project.budget,
       spentBudget: totalSpent,
       raciAssignments: finalRaciArray
     });
   };
 
-  // --- STAKEHOLDERS FORM STATE ---
+  // ==========================================
+  // 1. STAKEHOLDERS EDITING LOGIC
+  // ==========================================
   const [shName, setShName] = useState('');
   const [shRole, setShRole] = useState('');
   const [shInfluence, setShInfluence] = useState<'low' | 'medium' | 'high'>('medium');
   const [shGroupId, setShGroupId] = useState('');
   const [newShGroupFormName, setNewShGroupFormName] = useState('');
-  const [selectedTeamMemberId, setSelectedTeamMemberId] = useState('');
+
+  // Modals for editing groups & stakeholders
+  const [editingGroup, setEditingGroup] = useState<StakeholderGroup | null>(null);
+  const [editingStakeholder, setEditingStakeholder] = useState<{ groupId: string; stakeholder: Stakeholder } | null>(null);
 
   const handleAddShGroup = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newShGroupFormName.trim()) return;
-    const newGroup = {
-      id: `group-${Date.now()}`,
+    const newGroup: StakeholderGroup = {
+      id: `sg-${Date.now()}`,
       name: newShGroupFormName.trim(),
       stakeholders: []
     };
@@ -188,17 +193,25 @@ export default function ProjectDashboard({
     setNewShGroupFormName('');
   };
 
-  const handleRemoveShGroup = (id: string) => {
-    const updated = stakeholderGroups.filter(g => g.id !== id);
+  const handleUpdateGroup = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingGroup) return;
+    const updated = stakeholderGroups.map((g) => (g.id === editingGroup.id ? editingGroup : g));
+    setStakeholderGroups(updated);
+    updateProjectData({ stakeholderGroups: updated });
+    setEditingGroup(null);
+  };
+
+  const handleRemoveShGroup = (groupId: string) => {
+    const updated = stakeholderGroups.filter((g) => g.id !== groupId);
     setStakeholderGroups(updated);
     updateProjectData({ stakeholderGroups: updated });
   };
 
   const handleAddStakeholderToGroup = (e: React.FormEvent) => {
     e.preventDefault();
-    const targetGroupId = shGroupId || (stakeholderGroups[0] ? stakeholderGroups[0].id : '');
-    if (!targetGroupId) return;
-    if (!shName.trim()) return;
+    const targetGroupId = shGroupId || (stakeholderGroups.length > 0 ? stakeholderGroups[0].id : '');
+    if (!targetGroupId || !shName.trim()) return;
 
     const newSh: Stakeholder = {
       id: `sh-${Date.now()}`,
@@ -207,7 +220,7 @@ export default function ProjectDashboard({
       influence: shInfluence
     };
 
-    const updated = stakeholderGroups.map(g => {
+    const updated = stakeholderGroups.map((g) => {
       if (g.id === targetGroupId) {
         return {
           ...g,
@@ -219,20 +232,36 @@ export default function ProjectDashboard({
 
     setStakeholderGroups(updated);
     updateProjectData({ stakeholderGroups: updated });
-
-    // Clear form
     setShName('');
     setShRole('');
-    setShInfluence('medium');
-    setSelectedTeamMemberId('');
   };
 
-  const handleRemoveStakeholderFromGroup = (groupId: string, shId: string) => {
-    const updated = stakeholderGroups.map(g => {
+  const handleUpdateStakeholder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStakeholder) return;
+    const { groupId, stakeholder } = editingStakeholder;
+
+    const updated = stakeholderGroups.map((g) => {
       if (g.id === groupId) {
         return {
           ...g,
-          stakeholders: (g.stakeholders || []).filter(s => s.id !== shId)
+          stakeholders: (g.stakeholders || []).map((s) => (s.id === stakeholder.id ? stakeholder : s))
+        };
+      }
+      return g;
+    });
+
+    setStakeholderGroups(updated);
+    updateProjectData({ stakeholderGroups: updated });
+    setEditingStakeholder(null);
+  };
+
+  const handleRemoveStakeholderFromGroup = (groupId: string, shId: string) => {
+    const updated = stakeholderGroups.map((g) => {
+      if (g.id === groupId) {
+        return {
+          ...g,
+          stakeholders: (g.stakeholders || []).filter((s) => s.id !== shId)
         };
       }
       return g;
@@ -241,32 +270,39 @@ export default function ProjectDashboard({
     updateProjectData({ stakeholderGroups: updated });
   };
 
-  // Helper to prefill from team selection
-  const handleSelectTeamMemberForStakeholder = (memberId: string) => {
-    setSelectedTeamMemberId(memberId);
-    if (!memberId) {
-      setShName('');
-      setShRole('');
-      return;
-    }
-    const member = globalTeam.find(t => t.id === memberId);
-    if (member) {
-      setShName(`${member.firstName} ${member.lastName}`);
-      setShRole(member.role);
-    }
-  };
-
-  // --- GANTT FORM STATE ---
+  // ==========================================
+  // 2. PLANIFICATION (GANTT) EDITING LOGIC
+  // ==========================================
   const [newPhaseName, setNewPhaseName] = useState('');
-  
-  // Item (task/milestone) creation states
   const [activePhaseIdForNewItem, setActivePhaseIdForNewItem] = useState<string | null>(null);
   const [itemType, setItemType] = useState<'task' | 'milestone'>('task');
   const [itemName, setItemName] = useState('');
-  const [itemAssigned, setItemAssigned] = useState('');
+  const [itemAssignedArray, setItemAssignedArray] = useState<string[]>([]);
   const [itemStart, setItemStart] = useState('');
   const [itemEnd, setItemEnd] = useState('');
   const [itemPredecessorId, setItemPredecessorId] = useState('');
+  const [itemEstDays, setItemEstDays] = useState(1);
+
+  // Edit GanttItem modal state
+  const [editingGanttItem, setEditingGanttItem] = useState<{ phaseId: string; item: GanttItem } | null>(null);
+
+  // Predecessor date helper calculation: predecessor endDate + 1 day
+  const handlePredecessorChange = (predId: string, currentStartSetter: (d: string) => void) => {
+    if (!predId) return;
+    let predItem: GanttItem | null = null;
+    ganttPhases.forEach((phase) => {
+      phase.items.forEach((it) => {
+        if (it.id === predId) predItem = it;
+      });
+    });
+
+    if (predItem && (predItem as GanttItem).endDate) {
+      const predEnd = new Date((predItem as GanttItem).endDate);
+      predEnd.setDate(predEnd.getDate() + 1);
+      const formatted = predEnd.toISOString().split('T')[0];
+      currentStartSetter(formatted);
+    }
+  };
 
   const handleAddPhase = (e: React.FormEvent) => {
     e.preventDefault();
@@ -283,7 +319,7 @@ export default function ProjectDashboard({
   };
 
   const handleRemovePhase = (phaseId: string) => {
-    const updated = ganttPhases.filter(p => p.id !== phaseId);
+    const updated = ganttPhases.filter((p) => p.id !== phaseId);
     setGanttPhases(updated);
     updateProjectData({ ganttPhases: updated });
   };
@@ -294,43 +330,58 @@ export default function ProjectDashboard({
       id: `item-${Date.now()}`,
       type: itemType,
       name: itemName.trim(),
-      assignedTo: itemAssigned || undefined,
+      assignedTo: itemAssignedArray.length > 0 ? itemAssignedArray : undefined,
       startDate: itemStart || project.startDate || new Date().toISOString().split('T')[0],
       endDate: itemEnd || itemStart || project.endDate || new Date().toISOString().split('T')[0],
-      progress: itemType === 'task' ? 0 : 0,
+      progress: 0,
       completed: false,
-      predecessorId: itemPredecessorId || undefined
+      predecessorId: itemPredecessorId || undefined,
+      estimatedDays: itemEstDays || 1
     };
 
-    const updated = ganttPhases.map(phase => {
-      if (phase.id === phaseId) {
-        return {
-          ...phase,
-          items: [...phase.items, newItem]
-        };
+    const updated = ganttPhases.map((p) => {
+      if (p.id === phaseId) {
+        return { ...p, items: [...p.items, newItem] };
       }
-      return phase;
+      return p;
     });
 
     setGanttPhases(updated);
     updateProjectData({ ganttPhases: updated });
-    
-    // Clear item inputs
+
     setItemName('');
-    setItemAssigned('');
+    setItemAssignedArray([]);
     setItemStart('');
     setItemEnd('');
     setItemPredecessorId('');
+    setItemEstDays(1);
     setActivePhaseIdForNewItem(null);
   };
 
-  const handleRemoveItem = (phaseId: string, itemId: string) => {
-    const updated = ganttPhases.map(phase => {
+  const handleSaveGanttItemEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingGanttItem) return;
+    const { phaseId, item } = editingGanttItem;
+
+    const updated = ganttPhases.map((phase) => {
       if (phase.id === phaseId) {
         return {
           ...phase,
-          items: phase.items.filter(item => item.id !== itemId)
+          items: phase.items.map((it) => (it.id === item.id ? item : it))
         };
+      }
+      return phase;
+    });
+
+    setGanttPhases(updated);
+    updateProjectData({ ganttPhases: updated });
+    setEditingGanttItem(null);
+  };
+
+  const handleRemoveGanttItem = (phaseId: string, itemId: string) => {
+    const updated = ganttPhases.map((phase) => {
+      if (phase.id === phaseId) {
+        return { ...phase, items: phase.items.filter((it) => it.id !== itemId) };
       }
       return phase;
     });
@@ -338,12 +389,12 @@ export default function ProjectDashboard({
     updateProjectData({ ganttPhases: updated });
   };
 
-  const handleUpdateItemProgress = (phaseId: string, itemId: string, progress: number) => {
-    const updated = ganttPhases.map(phase => {
+  const handleUpdateTaskProgress = (phaseId: string, itemId: string, progress: number) => {
+    const updated = ganttPhases.map((phase) => {
       if (phase.id === phaseId) {
         return {
           ...phase,
-          items: phase.items.map(item => {
+          items: phase.items.map((item) => {
             if (item.id === itemId) {
               return { ...item, progress, completed: progress === 100 };
             }
@@ -358,11 +409,11 @@ export default function ProjectDashboard({
   };
 
   const handleToggleMilestone = (phaseId: string, itemId: string, completed: boolean) => {
-    const updated = ganttPhases.map(phase => {
+    const updated = ganttPhases.map((phase) => {
       if (phase.id === phaseId) {
         return {
           ...phase,
-          items: phase.items.map(item => {
+          items: phase.items.map((item) => {
             if (item.id === itemId) {
               return { ...item, completed, progress: completed ? 100 : 0 };
             }
@@ -376,31 +427,29 @@ export default function ProjectDashboard({
     updateProjectData({ ganttPhases: updated });
   };
 
-  // --- RACI MATRIX COMPUTATIONS ---
-  // Rows contain tasks/milestones from Gantt dynamically, and custom customRaciRows
+  // Helper list for predecessors select
+  const allGanttItems = ganttPhases.flatMap((p) => p.items);
+
+  // ==========================================
+  // 3. RACI MATRIX LOGIC
+  // ==========================================
   const getRaciRows = () => {
     const ganttElements: string[] = [];
-    ganttPhases.forEach(phase => {
-      phase.items.forEach(item => {
+    ganttPhases.forEach((phase) => {
+      phase.items.forEach((item) => {
         const prefix = item.type === 'milestone' ? '◆ Jalon: ' : '■ Tâche: ';
         ganttElements.push(`${prefix}${item.name}`);
       });
     });
 
-    // Merge everything uniquely
-    const list = [
-      ...ganttElements,
-      ...customRaciRows
-    ];
+    const list = [...ganttElements, ...customRaciRows];
     return Array.from(new Set(list));
   };
 
-  // Columns adapt to: PM, and stakeholderGroups
+  // Filter out duplicate 'Chef de Projet' role from columns
   const getRaciParticipants = () => {
-    const participants: { id: string; name: string; type: 'manager' | 'group' }[] = [
-      { id: 'manager', name: project.manager || 'Chef de Projet', type: 'manager' }
-    ];
-    stakeholderGroups.forEach(g => {
+    const participants: { id: string; name: string; type: 'group' }[] = [];
+    stakeholderGroups.forEach((g) => {
       participants.push({ id: `group-${g.id}`, name: g.name, type: 'group' });
     });
     return participants;
@@ -416,6 +465,15 @@ export default function ProjectDashboard({
     setNewRaciRow('');
   };
 
+  const handleDeleteCustomRaciRow = (rowName: string) => {
+    const updatedCustom = customRaciRows.filter((r) => r !== rowName);
+    setCustomRaciRows(updatedCustom);
+    const updatedRaci = { ...raciAssignments };
+    delete updatedRaci[rowName];
+    setRaciAssignments(updatedRaci);
+    updateProjectData({ customRaciRows: updatedCustom });
+  };
+
   const handleUpdateRaciCell = (rowName: string, participantId: string, value: string) => {
     const nextRaci = { ...raciAssignments };
     if (!nextRaci[rowName]) {
@@ -424,7 +482,6 @@ export default function ProjectDashboard({
     nextRaci[rowName][participantId] = value;
     setRaciAssignments(nextRaci);
 
-    // Save back to project state
     const finalRaciArray = Object.entries(nextRaci).map(([name, assignments]) => ({
       rowName: name,
       assignments: assignments as Record<string, string>
@@ -435,11 +492,15 @@ export default function ProjectDashboard({
     });
   };
 
-  // --- RISKS REGISTER FORM STATE ---
+  // ==========================================
+  // 4. RISKS LOGIC & EDITING
+  // ==========================================
   const [newRiskDesc, setNewRiskDesc] = useState('');
   const [newRiskProb, setNewRiskProb] = useState(3);
   const [newRiskImpact, setNewRiskImpact] = useState(3);
   const [newRiskMitigation, setNewRiskMitigation] = useState('');
+
+  const [editingRisk, setEditingRisk] = useState<{ id: string; desc: string; prob: number; impact: number; mitigation: string; owner?: string } | null>(null);
 
   const handleAddRisk = (e: React.FormEvent) => {
     e.preventDefault();
@@ -449,315 +510,317 @@ export default function ProjectDashboard({
       desc: newRiskDesc.trim(),
       prob: Number(newRiskProb),
       impact: Number(newRiskImpact),
-      mitigation: newRiskMitigation.trim() || 'En cours de définition'
+      mitigation: newRiskMitigation.trim()
     };
+
     const updated = [...risks, newR];
     setRisks(updated);
-    updateProjectData({ risks: updated });
+    updateProjectData({ risksRegister: updated });
+
     setNewRiskDesc('');
-    setNewRiskMitigation('');
     setNewRiskProb(3);
     setNewRiskImpact(3);
+    setNewRiskMitigation('');
   };
 
-  const handleDeleteRisk = (id: string) => {
-    const updated = risks.filter(r => r.id !== id);
+  const handleUpdateRisk = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRisk) return;
+    const updated = risks.map((r) => (r.id === editingRisk.id ? editingRisk : r));
     setRisks(updated);
-    updateProjectData({ risks: updated });
+    updateProjectData({ risksRegister: updated });
+    setEditingRisk(null);
   };
 
-  // --- BUDGET GROUPS FORM STATE ---
-  const [newGroupName, setNewGroupName] = useState('');
-  const [expenseGroupToAddTo, setExpenseGroupToAddTo] = useState<string | null>(null);
-  const [newExpenseName, setNewExpenseName] = useState('');
-  const [newExpenseQuantity, setNewExpenseQuantity] = useState('1');
-  const [newExpenseUnitPricePlanned, setNewExpenseUnitPricePlanned] = useState('');
-  const [newExpenseUnitPriceSpent, setNewExpenseUnitPriceSpent] = useState('');
+  const handleRemoveRisk = (id: string) => {
+    const updated = risks.filter((r) => r.id !== id);
+    setRisks(updated);
+    updateProjectData({ risksRegister: updated });
+  };
+
+  // ==========================================
+  // 5. BUDGET LOGIC & EDITING
+  // ==========================================
+  const [newBudgetGroupTitle, setNewBudgetGroupTitle] = useState('');
+  const [expenseTitle, setExpenseTitle] = useState('');
+  const [expensePlanned, setExpensePlanned] = useState<number | ''>('');
+  const [expenseSpent, setExpenseSpent] = useState<number | ''>('');
+  const [expenseGroupId, setExpenseGroupId] = useState('');
+
+  const [editingBudgetGroup, setEditingBudgetGroup] = useState<BudgetGroup | null>(null);
+  const [editingExpense, setEditingExpense] = useState<{ groupId: string; expense: BudgetExpense } | null>(null);
 
   const handleAddBudgetGroup = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newGroupName.trim()) return;
-    const newGroup: BudgetGroup = {
+    if (!newBudgetGroupTitle.trim()) return;
+    const newG: BudgetGroup = {
       id: `bg-${Date.now()}`,
-      name: newGroupName.trim(),
+      name: newBudgetGroupTitle.trim(),
+      title: newBudgetGroupTitle.trim(),
       expenses: []
     };
-    const updated = [...budgetGroups, newGroup];
+    const updated = [...budgetGroups, newG];
     setBudgetGroups(updated);
     updateProjectData({ budgetGroups: updated });
-    setNewGroupName('');
+    setNewBudgetGroupTitle('');
+  };
+
+  const handleUpdateBudgetGroup = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBudgetGroup) return;
+    const updated = budgetGroups.map((g) => (g.id === editingBudgetGroup.id ? editingBudgetGroup : g));
+    setBudgetGroups(updated);
+    updateProjectData({ budgetGroups: updated });
+    setEditingBudgetGroup(null);
   };
 
   const handleRemoveBudgetGroup = (groupId: string) => {
-    const updated = budgetGroups.filter(g => g.id !== groupId);
+    const updated = budgetGroups.filter((g) => g.id !== groupId);
     setBudgetGroups(updated);
     updateProjectData({ budgetGroups: updated });
   };
 
-  const handleAddExpenseToGroup = (groupId: string) => {
-    if (!newExpenseName.trim()) return;
-    const qty = Number(newExpenseQuantity) || 1;
-    const upPlanned = Number(newExpenseUnitPricePlanned) || 0;
-    const upSpent = Number(newExpenseUnitPriceSpent) || 0;
-    const planned = qty * upPlanned;
-    const spent = qty * upSpent;
+  const handleAddExpenseToGroup = (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetGroupId = expenseGroupId || (budgetGroups.length > 0 ? budgetGroups[0].id : '');
+    if (!targetGroupId || !expenseTitle.trim()) return;
 
-    const newExpense: BudgetExpense = {
+    const newE: BudgetExpense = {
       id: `exp-${Date.now()}`,
-      name: newExpenseName.trim(),
-      quantity: qty,
-      unitPricePlanned: upPlanned,
-      unitPriceSpent: upSpent,
-      planned,
-      spent
+      name: expenseTitle.trim(),
+      title: expenseTitle.trim(),
+      planned: Number(expensePlanned) || 0,
+      spent: Number(expenseSpent) || 0
     };
 
-    const updated = budgetGroups.map(group => {
-      if (group.id === groupId) {
-        return {
-          ...group,
-          expenses: [...group.expenses, newExpense]
-        };
+    const updated = budgetGroups.map((g) => {
+      if (g.id === targetGroupId) {
+        return { ...g, expenses: [...g.expenses, newE] };
       }
-      return group;
+      return g;
     });
 
     setBudgetGroups(updated);
     updateProjectData({ budgetGroups: updated });
-    
-    setNewExpenseName('');
-    setNewExpenseQuantity('1');
-    setNewExpenseUnitPricePlanned('');
-    setNewExpenseUnitPriceSpent('');
-    setExpenseGroupToAddTo(null);
+
+    setExpenseTitle('');
+    setExpensePlanned('');
+    setExpenseSpent('');
   };
 
-  const handleRemoveExpenseFromGroup = (groupId: string, expenseId: string) => {
-    const updated = budgetGroups.map(group => {
-      if (group.id === groupId) {
+  const handleUpdateExpense = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingExpense) return;
+    const { groupId, expense } = editingExpense;
+
+    const updated = budgetGroups.map((g) => {
+      if (g.id === groupId) {
         return {
-          ...group,
-          expenses: group.expenses.filter(exp => exp.id !== expenseId)
+          ...g,
+          expenses: g.expenses.map((e) => (e.id === expense.id ? expense : e))
         };
       }
-      return group;
+      return g;
+    });
+
+    setBudgetGroups(updated);
+    updateProjectData({ budgetGroups: updated });
+    setEditingExpense(null);
+  };
+
+  const handleRemoveExpenseFromGroup = (groupId: string, expId: string) => {
+    const updated = budgetGroups.map((g) => {
+      if (g.id === groupId) {
+        return { ...g, expenses: g.expenses.filter((e) => e.id !== expId) };
+      }
+      return g;
     });
     setBudgetGroups(updated);
     updateProjectData({ budgetGroups: updated });
   };
 
-  // --- COMMUNICATION PLANS STATE ---
-  const [commSubTab, setCommSubTab] = useState<'meetings' | 'deliverables'>('meetings');
+  // ==========================================
+  // 6. COMMUNICATION LOGIC & EDITING
+  // ==========================================
+  // Meetings
   const [meetingTitle, setMeetingTitle] = useState('');
-  const [meetingDate, setMeetingDate] = useState('');
   const [meetingObjectives, setMeetingObjectives] = useState('');
-  const [meetingStatus, setMeetingStatus] = useState<'planned' | 'done' | 'delayed'>('planned');
+  const [meetingDate, setMeetingDate] = useState('');
+  const [meetingType, setMeetingType] = useState<'one_time' | 'recurring'>('one_time');
+  const [meetingFrequency, setMeetingFrequency] = useState('Hebdomadaire');
 
-  const [commTitle, setCommTitle] = useState('');
-  const [commAudience, setCommAudience] = useState('');
-  const [commDate, setCommDate] = useState('');
-  const [commStatus, setCommStatus] = useState<'planned' | 'done' | 'delayed'>('planned');
+  const [editingMeeting, setEditingMeeting] = useState<GovernanceMeeting | null>(null);
 
   const handleAddMeeting = (e: React.FormEvent) => {
     e.preventDefault();
     if (!meetingTitle.trim()) return;
-    const newM = {
+
+    const newM: GovernanceMeeting = {
       id: `m-${Date.now()}`,
       title: meetingTitle.trim(),
+      objectives: meetingObjectives.trim(),
+      status: 'scheduled',
       date: meetingDate || new Date().toISOString().split('T')[0],
-      objectives: meetingObjectives.trim() || 'Suivi et gouvernance',
-      status: meetingStatus
+      type: meetingType,
+      frequency: meetingType === 'recurring' ? meetingFrequency : undefined
     };
-    const updated = [...meetings, newM];
-    setMeetings(updated);
-    onUpdateProject({ ...project, meetings: updated });
+
+    const updated = [...governanceMeetings, newM];
+    setGovernanceMeetings(updated);
+    updateProjectData({ governanceMeetings: updated });
+
     setMeetingTitle('');
-    setMeetingDate('');
     setMeetingObjectives('');
-    setMeetingStatus('planned');
+    setMeetingDate('');
+  };
+
+  const handleUpdateMeeting = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMeeting) return;
+    const updated = governanceMeetings.map((m) => (m.id === editingMeeting.id ? editingMeeting : m));
+    setGovernanceMeetings(updated);
+    updateProjectData({ governanceMeetings: updated });
+    setEditingMeeting(null);
   };
 
   const handleDeleteMeeting = (id: string) => {
-    const updated = meetings.filter(m => m.id !== id);
-    setMeetings(updated);
-    onUpdateProject({ ...project, meetings: updated });
+    const updated = governanceMeetings.filter((m) => m.id !== id);
+    setGovernanceMeetings(updated);
+    updateProjectData({ governanceMeetings: updated });
   };
+
+  // Staff Communications / Actions
+  const [commTitle, setCommTitle] = useState('');
+  const [commAudience, setCommAudience] = useState('');
+  const [commDate, setCommDate] = useState('');
+  const [commMsgContent, setCommMsgContent] = useState('');
+  const [commAttachmentName, setCommAttachmentName] = useState('');
+  const [commAttachmentUrl, setCommAttachmentUrl] = useState('');
+
+  const [editingStaffComm, setEditingStaffComm] = useState<StaffCommunication | null>(null);
 
   const handleAddStaffComm = (e: React.FormEvent) => {
     e.preventDefault();
     if (!commTitle.trim()) return;
+
     const newC: StaffCommunication = {
-      id: `c-${Date.now()}`,
+      id: `sc-${Date.now()}`,
       title: commTitle.trim(),
-      targetAudience: commAudience.trim() || 'Employés',
+      audience: commAudience.trim() || 'Équipe & Stakeholders',
       date: commDate || new Date().toISOString().split('T')[0],
-      status: commStatus
+      status: 'planned',
+      messageContent: commMsgContent.trim(),
+      attachmentName: commAttachmentName.trim(),
+      attachmentUrl: commAttachmentUrl.trim()
     };
-    const updated = [...staffCommunications, newC];
-    setStaffCommunications(updated);
+
+    const updated = [...staffComms, newC];
+    setStaffComms(updated);
     updateProjectData({ staffCommunications: updated });
+
     setCommTitle('');
     setCommAudience('');
     setCommDate('');
-    setCommStatus('planned');
+    setCommMsgContent('');
+    setCommAttachmentName('');
+    setCommAttachmentUrl('');
   };
 
-  const handleDeleteStaffComm = (id: string) => {
-    const updated = staffCommunications.filter(c => c.id !== id);
-    setStaffCommunications(updated);
+  const handleToggleCommDone = (commId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'sent' ? 'planned' : 'sent';
+    const updated = staffComms.map((c) => (c.id === commId ? { ...c, status: nextStatus as any } : c));
+    setStaffComms(updated);
     updateProjectData({ staffCommunications: updated });
   };
 
-  // --- KPIS FORM STATE ---
+  const handleUpdateStaffComm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStaffComm) return;
+    const updated = staffComms.map((c) => (c.id === editingStaffComm.id ? editingStaffComm : c));
+    setStaffComms(updated);
+    updateProjectData({ staffCommunications: updated });
+    setEditingStaffComm(null);
+  };
+
+  const handleDeleteStaffComm = (id: string) => {
+    const updated = staffComms.filter((c) => c.id !== id);
+    setStaffComms(updated);
+    updateProjectData({ staffCommunications: updated });
+  };
+
+  // ==========================================
+  // 7. KPI LOGIC & EDITING
+  // ==========================================
   const [kpiName, setKpiName] = useState('');
-  const [kpiMetricType, setKpiMetricType] = useState<'percent' | 'time' | 'date' | 'text' | 'number'>('percent');
-  const [kpiTarget, setKpiTarget] = useState('');
+  const [kpiType, setKpiType] = useState<'number' | 'percentage' | 'currency' | 'text'>('number');
   const [kpiCurrent, setKpiCurrent] = useState('');
-  const [kpiScore, setKpiScore] = useState(80); // Slider progress score (0-100)
+  const [kpiTarget, setKpiTarget] = useState('');
+  const [kpiScore, setKpiScore] = useState<'ok' | 'warning' | 'alert'>('ok');
+
+  const [editingKpi, setEditingKpi] = useState<Kpi | null>(null);
 
   const handleAddKpi = (e: React.FormEvent) => {
     e.preventDefault();
     if (!kpiName.trim()) return;
-    const newKpi: Kpi = {
+
+    const newK: Kpi = {
       id: `kpi-${Date.now()}`,
       name: kpiName.trim(),
-      metricType: kpiMetricType,
-      targetValue: kpiTarget.trim() || '100',
+      metricType: kpiType,
       currentValue: kpiCurrent.trim() || '0',
-      status: Number(kpiScore)
+      targetValue: kpiTarget.trim() || '100',
+      statusScore: kpiScore
     };
-    const updated = [...kpis, newKpi];
-    setKpis(updated);
+
+    const updated = [...kpiList, newK];
+    setKpiList(updated);
     updateProjectData({ kpis: updated });
+
     setKpiName('');
-    setKpiTarget('');
     setKpiCurrent('');
-    setKpiScore(80);
+    setKpiTarget('');
+  };
+
+  const handleUpdateKpi = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingKpi) return;
+    const updated = kpiList.map((k) => (k.id === editingKpi.id ? editingKpi : k));
+    setKpiList(updated);
+    updateProjectData({ kpis: updated });
+    setEditingKpi(null);
   };
 
   const handleDeleteKpi = (id: string) => {
-    const updated = kpis.filter(k => k.id !== id);
-    setKpis(updated);
+    const updated = kpiList.filter((k) => k.id !== id);
+    setKpiList(updated);
     updateProjectData({ kpis: updated });
   };
 
+  // Calculations for KPI Cards
+  const dynamicBudget = budgetGroups.reduce((sum, g) => sum + g.expenses.reduce((s, e) => s + e.planned, 0), 0);
+  const dynamicSpent = budgetGroups.reduce((sum, g) => sum + g.expenses.reduce((s, e) => s + e.spent, 0), 0);
+  const isOverBudget = dynamicSpent > dynamicBudget && dynamicBudget > 0;
+  const budgetRatio = dynamicBudget > 0 ? dynamicSpent / dynamicBudget : 0;
 
-  // --- DYNAMIC DASHBOARD CALCULATIONS (FOR THE 3 TOP CARD PILIERS) ---
-  const dynamicBudget = project.budget || 0;
-
-  const dynamicSpent = budgetGroups.length > 0
-    ? budgetGroups.reduce((acc, g) => acc + g.expenses.reduce((s, e) => s + e.spent, 0), 0)
-    : project.spentBudget;
-
-  const budgetRatio = dynamicBudget > 0 ? (dynamicSpent / dynamicBudget) : 0;
-  const isOverBudget = dynamicSpent > dynamicBudget;
-
-  // Task progress computation from Gantt Phases
-  const totalTasksCount = ganttPhases.reduce((acc, p) => acc + p.items.length, 0);
-  const completedTasksCount = ganttPhases.reduce((acc, p) => 
-    acc + p.items.filter(item => item.type === 'task' ? item.progress === 100 : item.completed).length, 0
+  const totalGanttItems = ganttPhases.reduce((sum, p) => sum + p.items.length, 0);
+  const completedGanttItems = ganttPhases.reduce(
+    (sum, p) => sum + p.items.filter((i) => (i.type === 'task' ? i.progress === 100 : i.completed)).length,
+    0
   );
-  
-  const dynamicProgress = totalTasksCount > 0 
-    ? Math.round((completedTasksCount / totalTasksCount) * 100)
-    : (project.tasksTotal > 0 ? Math.round((project.tasksCompleted / project.tasksTotal) * 100) : 0);
+  const progressRatio = totalGanttItems > 0 ? completedGanttItems / totalGanttItems : 0;
 
-  // Time progress helper
-  const computeTimeProgress = () => {
-    const start = new Date(project.startDate || '2026-01-01').getTime();
-    const end = new Date(project.endDate || '2026-12-31').getTime();
-    const now = new Date().getTime();
-    if (now < start) return 0;
-    if (now > end) return 100;
-    return Math.round(((now - start) / (end - start)) * 100);
+  const formatDate = (d: string) => {
+    if (!d) return '-';
+    try {
+      const date = new Date(d);
+      return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    } catch {
+      return d;
+    }
   };
-  const timeProgress = computeTimeProgress();
 
   const formatEuro = (val: number) => {
     return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(val);
-  };
-
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return 'Non définie';
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
-  };
-
-  const renderDropdownDatePicker = (currentDate: string, onChange: (date: string) => void) => {
-    const dStr = currentDate || new Date().toISOString().split('T')[0];
-    const dateParts = dStr.split('-');
-    const yearVal = parseInt(dateParts[0], 10) || 2026;
-    const monthVal = parseInt(dateParts[1], 10) || 1;
-    const dayVal = parseInt(dateParts[2], 10) || 1;
-
-    const handleYearChange = (newY: number) => {
-      const formattedMonth = String(monthVal).padStart(2, '0');
-      const formattedDay = String(dayVal).padStart(2, '0');
-      onChange(`${newY}-${formattedMonth}-${formattedDay}`);
-    };
-
-    const handleMonthChange = (newM: number) => {
-      const formattedMonth = String(newM).padStart(2, '0');
-      const formattedDay = String(dayVal).padStart(2, '0');
-      onChange(`${yearVal}-${formattedMonth}-${formattedDay}`);
-    };
-
-    const handleDayChange = (newD: number) => {
-      const formattedMonth = String(monthVal).padStart(2, '0');
-      const formattedDay = String(newD).padStart(2, '0');
-      onChange(`${yearVal}-${formattedMonth}-${formattedDay}`);
-    };
-
-    const months = [
-      { v: 1, l: 'Jan' }, { v: 2, l: 'Fév' }, { v: 3, l: 'Mar' }, { v: 4, l: 'Avr' },
-      { v: 5, l: 'Mai' }, { v: 6, l: 'Juin' }, { v: 7, l: 'Juil' }, { v: 8, l: 'Aoû' },
-      { v: 9, l: 'Sep' }, { v: 10, l: 'Oct' }, { v: 11, l: 'Nov' }, { v: 12, l: 'Déc' }
-    ];
-
-    const years = Array.from({ length: 11 }, (_, i) => 2025 + i);
-    const days = Array.from({ length: 31 }, (_, i) => 1 + i);
-
-    return (
-      <div className="space-y-1 bg-white p-1.5 rounded-lg border border-slate-200 shadow-2xs w-full max-w-[210px]">
-        <div className="flex gap-1 items-center justify-between">
-          <select
-            value={dayVal}
-            onChange={(e) => handleDayChange(Number(e.target.value))}
-            className="text-[11px] px-1 py-0.5 border border-slate-300 rounded bg-white font-semibold flex-1 min-w-[42px]"
-          >
-            {days.map(d => (
-              <option key={d} value={d}>{String(d).padStart(2, '0')}</option>
-            ))}
-          </select>
-
-          <select
-            value={monthVal}
-            onChange={(e) => handleMonthChange(Number(e.target.value))}
-            className="text-[11px] px-1 py-0.5 border border-slate-300 rounded bg-white font-semibold flex-1 min-w-[50px]"
-          >
-            {months.map(m => (
-              <option key={m.v} value={m.v}>{m.l}</option>
-            ))}
-          </select>
-
-          <select
-            value={yearVal}
-            onChange={(e) => handleYearChange(Number(e.target.value))}
-            className="text-[11px] px-1 py-0.5 border border-slate-300 rounded bg-white font-semibold flex-1 min-w-[58px]"
-          >
-            {years.map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-        </div>
-        <input
-          type="date"
-          value={dStr}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full text-[10px] px-1.5 py-0.5 border border-slate-200 rounded font-mono text-center bg-slate-50 focus:bg-white"
-        />
-      </div>
-    );
   };
 
   return (
@@ -799,21 +862,7 @@ export default function ProjectDashboard({
                 </span>
               )}
             </div>
-            <p className="text-sm text-slate-500 max-w-2xl">{project.description}</p>
-          </div>
-
-          {/* Prioritization Score Gauge (Cotation) */}
-          <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-3 rounded-xl self-start md:self-auto">
-            <div className="p-2 rounded-lg bg-indigo-600/10 text-indigo-700">
-              <Gauge className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Cotation / Score</span>
-              <div className="flex items-baseline gap-1">
-                <span className="text-lg font-bold font-mono text-indigo-700">{project.prioritizationScore}</span>
-                <span className="text-xs text-slate-400 font-semibold">/ 100</span>
-              </div>
-            </div>
+            <p className="text-xs text-slate-500 max-w-2xl">{project.description}</p>
           </div>
         </div>
 
@@ -857,8 +906,7 @@ export default function ProjectDashboard({
         <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <DollarSign className="w-4 h-4 text-emerald-500" />
-              Suivi des Coûts
+              <DollarSign className="w-4 h-4 text-emerald-500" /> Suivi des Coûts
             </h3>
             {isOverBudget ? (
               <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
@@ -900,43 +948,27 @@ export default function ProjectDashboard({
           </div>
         </div>
 
-        {/* DÉLAIS CARD */}
+        {/* DÉLAIS / AVANCEMENT CARD */}
         <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <Clock className="w-4 h-4 text-indigo-500" />
-              Suivi des Délais
+              <Clock className="w-4 h-4 text-indigo-500" /> Avancement Planning
             </h3>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-              project.delayLevel === 'high' 
-                ? 'text-rose-600 bg-rose-50 border-rose-100' 
-                : project.delayLevel === 'medium' 
-                ? 'text-amber-600 bg-amber-50 border-amber-100' 
-                : 'text-emerald-600 bg-emerald-50 border-emerald-100'
-            }`}>
-              {project.delayLevel === 'high' ? 'Alerte' : project.delayLevel === 'medium' ? 'Risque' : 'En règle'}
+            <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+              {completedGanttItems} / {totalGanttItems} Tâches
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <span className="text-[10px] text-slate-400 font-bold uppercase block">Avancement Gantt</span>
-              <span className="text-base font-bold font-mono text-slate-800">{dynamicProgress}%</span>
-            </div>
-            <div>
-              <span className="text-[10px] text-slate-400 font-bold uppercase block">Temps Écoulé</span>
-              <span className="text-base font-bold font-mono text-slate-800">{timeProgress}%</span>
-            </div>
+          <div>
+            <span className="text-[10px] text-slate-400 font-bold uppercase block">Taux d'Avancement Global</span>
+            <span className="text-2xl font-bold font-mono text-slate-900">{Math.round(progressRatio * 100)}%</span>
           </div>
 
           <div className="space-y-1">
-            <div className="flex justify-between text-xs text-slate-500 font-medium">
-              <span>Échéance : {formatDate(project.endDate)}</span>
-            </div>
             <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
               <div 
-                className={`h-full rounded-full transition-all duration-300 ${project.delayLevel === 'high' ? 'bg-rose-500' : 'bg-indigo-500'}`}
-                style={{ width: `${dynamicProgress}%` }}
+                className="h-full bg-indigo-600 rounded-full transition-all duration-300"
+                style={{ width: `${Math.min(100, progressRatio * 100)}%` }}
               />
             </div>
           </div>
@@ -946,8 +978,7 @@ export default function ProjectDashboard({
         <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <Award className="w-4 h-4 text-amber-500" />
-              Suivi Qualité
+              <Award className="w-4 h-4 text-amber-500" /> Suivi Qualité
             </h3>
             <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
               Conformité: {project.qualityIndex}%
@@ -981,10 +1012,11 @@ export default function ProjectDashboard({
       {/* 3. CORE SUB-MODULES NAVIGATION */}
       <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
         
-        {/* Navigation Tabs (Ordered precisely by user) */}
+        {/* Navigation Tabs (Ordered strictly as requested) */}
         <div className="flex flex-wrap border-b border-slate-200 bg-slate-50/50">
           {[
             { id: 'stakeholders', label: 'Parties Prenantes', icon: Users },
+            { id: 'decisionMatrix', label: 'Matrice de Décision', icon: Sliders },
             { id: 'planification', label: 'Planification', icon: Layers },
             { id: 'organisation', label: 'Organisation (RACI)', icon: Briefcase },
             { id: 'risks', label: 'Risques', icon: ShieldAlert },
@@ -1019,1712 +1051,1384 @@ export default function ProjectDashboard({
           {/* TAB 1: PARTIES PRENANTES */}
           {activeTab === 'stakeholders' && (
             <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 pb-3">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800">Registre et Groupes des Parties Prenantes (Stakeholders)</h3>
-                  <p className="text-xs text-slate-500">Organisez les parties prenantes par groupes, assignez des rôles et gérez les influences sur le projet.</p>
-                </div>
+              
+              {/* Sub-tabs header */}
+              <div className="flex border-b border-slate-200 pb-2 gap-4">
+                <button
+                  onClick={() => setStakeholderSubTab('list')}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                    stakeholderSubTab === 'list'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  Groupes & Parties Prenantes
+                </button>
+                <button
+                  onClick={() => setStakeholderSubTab('charter')}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                    stakeholderSubTab === 'charter'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <FileSignature className="w-3.5 h-3.5" />
+                  Charte d'Équipe
+                </button>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* Left side column: Forms */}
+              {stakeholderSubTab === 'charter' ? (
+                <TeamCharterTab project={project} onUpdateProject={updateProjectData} />
+              ) : (
                 <div className="space-y-6">
-                  
-                  {/* Create Group Form */}
-                  <form onSubmit={handleAddShGroup} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
-                      <Plus className="w-3.5 h-3.5 text-indigo-600" /> Créer un Groupe
-                    </h4>
+                  <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 pb-3">
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nom du Groupe</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="ex: Comité de Direction, Prestataires..."
-                        value={newShGroupFormName}
-                        onChange={(e) => setNewShGroupFormName(e.target.value)}
-                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
-                      />
+                      <h3 className="text-sm font-bold text-slate-800">Registre et Groupes des Parties Prenantes (Stakeholders)</h3>
+                      <p className="text-xs text-slate-500">Organisez les parties prenantes par groupes, modifiez les groupes et gérez leurs rôles.</p>
                     </div>
-                    <button
-                      type="submit"
-                      className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-xs transition-colors shadow-xs"
-                    >
-                      Créer le groupe
-                    </button>
-                  </form>
+                  </div>
 
-                  {/* Add Stakeholder Form */}
-                  <form onSubmit={handleAddStakeholderToGroup} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3.5">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
-                      <Plus className="w-3.5 h-3.5 text-indigo-600" /> Ajouter une Partie Prenante
-                    </h4>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     
-                    <div className="space-y-2.5">
-                      {/* Select Target Group */}
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Groupe Cible</label>
-                        <select
-                          required
-                          value={shGroupId}
-                          onChange={(e) => setShGroupId(e.target.value)}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white focus:ring-1 focus:ring-indigo-500"
-                        >
-                          <option value="">-- Sélectionner un groupe --</option>
-                          {stakeholderGroups.map((g) => (
-                            <option key={g.id} value={g.id}>{g.name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Select from Team (Optional Shortcut) */}
-                      <div>
-                        <label className="block text-[10px] font-bold text-indigo-600 uppercase mb-1">Importer depuis l'Équipe (Optionnel)</label>
-                        <select
-                          value={selectedTeamMemberId}
-                          onChange={(e) => handleSelectTeamMemberForStakeholder(e.target.value)}
-                          className="w-full text-xs px-2.5 py-1.5 border border-indigo-200 rounded bg-indigo-50/30 text-indigo-950 focus:ring-1 focus:ring-indigo-500"
-                        >
-                          <option value="">-- Choisir un collaborateur --</option>
-                          {globalTeam.map((member) => (
-                            <option key={member.id} value={member.id}>
-                              👤 {member.firstName} {member.lastName} ({member.role})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Name (Manual or auto-filled) */}
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nom Complet</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="ex: Jean Dupont"
-                          value={shName}
-                          onChange={(e) => setShName(e.target.value)}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
-                        />
-                      </div>
-
-                      {/* Role (Manual or auto-filled) */}
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Rôle / Intérêt dans le projet</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="ex: Sponsor Principal, Référent Technique..."
-                          value={shRole}
-                          onChange={(e) => setShRole(e.target.value)}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
-                        />
-                      </div>
-
-                      {/* Influence */}
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Influence sur le projet</label>
-                        <select
-                          value={shInfluence}
-                          onChange={(e) => setShInfluence(e.target.value as any)}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white focus:ring-1 focus:ring-indigo-500"
-                        >
-                          <option value="low">Faible</option>
-                          <option value="medium">Moyenne</option>
-                          <option value="high">Élevée</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={stakeholderGroups.length === 0}
-                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded text-xs transition-colors shadow-xs"
-                    >
-                      {stakeholderGroups.length === 0 ? "Créez d'abord un groupe" : "Ajouter au Groupe"}
-                    </button>
-                  </form>
-                </div>
-
-                {/* Right side column: Render Stakeholder Groups list */}
-                <div className="lg:col-span-2 space-y-4">
-                  {stakeholderGroups.length === 0 ? (
-                    <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                      <p className="text-xs text-slate-400 font-medium">Aucun groupe de parties prenantes défini.</p>
-                      <p className="text-[11px] text-slate-400 mt-1">Saisissez un nom de groupe à gauche pour démarrer.</p>
-                    </div>
-                  ) : (
-                    stakeholderGroups.map((group) => (
-                      <div key={group.id} className="border border-slate-200 rounded-xl bg-white overflow-hidden shadow-xs">
-                        {/* Group Header */}
-                        <div className="bg-slate-50/80 border-b border-slate-150 p-3 flex justify-between items-center">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs text-indigo-950">{group.name}</span>
-                            <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-bold">
-                              {(group.stakeholders || []).length}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => handleRemoveShGroup(group.id)}
-                            className="text-slate-400 hover:text-rose-600 text-xs font-semibold flex items-center gap-0.5"
-                            title="Supprimer ce groupe"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                    {/* Left side column: Forms */}
+                    <div className="space-y-6">
+                      
+                      {/* Create Group Form */}
+                      <form onSubmit={handleAddShGroup} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
+                          <Plus className="w-3.5 h-3.5 text-indigo-600" /> Créer un Groupe
+                        </h4>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nom du Groupe</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="ex: Comité de Direction, Prestataires..."
+                            value={newShGroupFormName}
+                            onChange={(e) => setNewShGroupFormName(e.target.value)}
+                            className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                          />
                         </div>
+                        <button
+                          type="submit"
+                          className="w-full py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded transition-colors shadow-2xs"
+                        >
+                          Ajouter le Groupe
+                        </button>
+                      </form>
 
-                        {/* Group Members List */}
-                        <div className="p-1">
-                          {(!group.stakeholders || group.stakeholders.length === 0) ? (
-                            <p className="p-4 text-center text-slate-400 italic text-xs">Aucun membre dans ce groupe. Ajoutez-en un à gauche !</p>
-                          ) : (
-                            <table className="w-full text-left text-xs">
-                              <thead>
-                                <tr className="bg-slate-50/30 text-slate-400 uppercase font-semibold text-[9px] border-b border-slate-100">
-                                  <th className="py-1 px-3">Nom</th>
-                                  <th className="py-1 px-3">Rôle / Responsabilité</th>
-                                  <th className="py-1 px-3 text-center">Influence</th>
-                                  <th className="py-1 px-3 text-center">Actions</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100">
-                                {group.stakeholders.map((sh: any) => (
-                                  <tr key={sh.id} className="hover:bg-slate-50/50">
-                                    <td className="py-2 px-3 font-bold text-slate-800">{sh.name}</td>
-                                    <td className="py-2 px-3 text-slate-600">{sh.role}</td>
-                                    <td className="py-2 px-3 text-center">
-                                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[8px] font-bold uppercase border ${
-                                        sh.influence === 'high' 
-                                          ? 'bg-rose-50 border-rose-100 text-rose-700' 
-                                          : sh.influence === 'medium'
-                                          ? 'bg-amber-50 border-amber-100 text-amber-700'
-                                          : 'bg-slate-50 border-slate-200 text-slate-600'
-                                      }`}>
-                                        {sh.influence === 'high' ? 'Élevée' : sh.influence === 'medium' ? 'Moyenne' : 'Faible'}
-                                      </span>
-                                    </td>
-                                    <td className="py-2 px-3 text-center">
-                                      <button
-                                        onClick={() => handleRemoveStakeholderFromGroup(group.id, sh.id)}
-                                        className="text-slate-400 hover:text-rose-600 p-1"
-                                        title="Retirer du groupe"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                      {/* Add Stakeholder Form */}
+                      <form onSubmit={handleAddStakeholderToGroup} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
+                          <Plus className="w-3.5 h-3.5 text-indigo-600" /> Ajouter une Partie Prenante
+                        </h4>
 
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: PLANIFICATION (GANTT & DYNAMIC WBS) */}
-          {activeTab === 'planification' && (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-slate-100 pb-3">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800">Outil de Planification Gantt & WBS</h3>
-                  <p className="text-xs text-slate-500">Planifiez les phases du projet, ajoutez des tâches ou des jalons, et observez la matrice WBS se construire.</p>
-                </div>
-                {/* Sub tabs switcher */}
-                <div className="flex p-0.5 bg-slate-100 rounded-lg self-start">
-                  <button
-                    onClick={() => setPlanSubTab('gantt')}
-                    className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${planSubTab === 'gantt' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
-                  >
-                    Diagramme de Gantt
-                  </button>
-                  <button
-                    onClick={() => setPlanSubTab('wbs')}
-                    className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${planSubTab === 'wbs' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
-                  >
-                    Matrice WBS Dynamique
-                  </button>
-                </div>
-              </div>
-
-              {planSubTab === 'gantt' ? (
-                <div className="space-y-6">
-                  
-                  {/* Phase manager bar */}
-                  <form onSubmit={handleAddPhase} className="flex gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200 max-w-md">
-                    <input
-                      type="text"
-                      required
-                      placeholder="Nom de la nouvelle phase (ex: Phase 1: Conception)"
-                      value={newPhaseName}
-                      onChange={(e) => setNewPhaseName(e.target.value)}
-                      className="text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white flex-1 focus:outline-hidden"
-                    />
-                    <button
-                      type="submit"
-                      className="px-3.5 py-1.5 bg-indigo-600 text-white font-bold text-xs rounded shadow-xs hover:bg-indigo-700 shrink-0 cursor-pointer"
-                    >
-                      Créer la phase
-                    </button>
-                  </form>
-
-                  {/* Visual Chronogram / Gantt Chart */}
-                  {ganttPhases.length > 0 && (
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 shadow-2xs">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 border-b border-slate-200 pb-2">
-                        <Clock className="w-4 h-4 text-indigo-600" /> Chronogramme de Gantt Visuel (Temps Réel)
-                      </h4>
-                      <div className="overflow-x-auto">
-                        <div className="min-w-[650px] space-y-2">
-                          {/* Timeline Header */}
-                          <div className="flex border-b border-slate-200 text-[10px] text-slate-400 font-bold uppercase py-1">
-                            <div className="w-1/3 shrink-0">Phases / Livrables</div>
-                            <div className="w-2/3 flex justify-between px-2 font-mono">
-                              <span>{formatDate(project.startDate)}</span>
-                              <span>Milieu de Projet</span>
-                              <span>{formatDate(project.endDate)}</span>
-                            </div>
+                        <div className="space-y-2.5">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Groupe Cible</label>
+                            <select
+                              value={shGroupId}
+                              onChange={(e) => setShGroupId(e.target.value)}
+                              className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                            >
+                              {stakeholderGroups.map((g) => (
+                                <option key={g.id} value={g.id}>{g.name}</option>
+                              ))}
+                            </select>
                           </div>
 
-                          {ganttPhases.map((phase) => {
-                            const phaseItems = phase.items;
-                            return (
-                              <div key={phase.id} className="space-y-1.5 border-b border-slate-100/60 pb-2">
-                                <div className="text-[11px] font-bold text-indigo-950 bg-indigo-100/40 px-2 py-0.5 rounded w-fit mt-1">
-                                  📁 {phase.name}
-                                </div>
-                                {phaseItems.length === 0 ? (
-                                  <div className="flex text-[10px] text-slate-400 italic pl-4 py-0.5">
-                                    (Aucun élément de travail)
-                                  </div>
-                                ) : (
-                                  phaseItems.map((item) => {
-                                    const startMs = new Date(project.startDate || '2026-01-01').getTime();
-                                    const endMs = new Date(project.endDate || '2026-12-31').getTime();
-                                    const itemStartMs = new Date(item.startDate).getTime();
-                                    const itemEndMs = new Date(item.endDate).getTime();
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nom & Prénom</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="ex: Jean Dupont"
+                              value={shName}
+                              onChange={(e) => setShName(e.target.value)}
+                              className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                            />
+                          </div>
 
-                                    const totalDuration = Math.max(endMs - startMs, 86400000);
-                                    let leftPct = ((itemStartMs - startMs) / totalDuration) * 100;
-                                    let widthPct = ((itemEndMs - itemStartMs) / totalDuration) * 100;
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Rôle / Titre</label>
+                            <input
+                              type="text"
+                              placeholder="ex: Directeur Métier"
+                              value={shRole}
+                              onChange={(e) => setShRole(e.target.value)}
+                              className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                            />
+                          </div>
 
-                                    if (leftPct < 0) leftPct = 0;
-                                    if (leftPct > 100) leftPct = 95;
-                                    if (widthPct <= 0) widthPct = 5;
-                                    if (leftPct + widthPct > 100) widthPct = 100 - leftPct;
-
-                                    const barColor = item.type === 'milestone'
-                                      ? (item.completed ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse')
-                                      : (item.progress === 100 ? 'bg-emerald-600' : 'bg-indigo-500');
-
-                                    const predItem = item.predecessorId
-                                      ? ganttPhases.flatMap(p => p.items).find(i => i.id === item.predecessorId)
-                                      : null;
-
-                                    return (
-                                      <div key={item.id} className="flex items-center text-[11px] hover:bg-slate-100/50 py-1 px-1 rounded transition-colors">
-                                        <div className="w-1/3 shrink-0 pr-3 font-semibold text-slate-700 truncate flex items-center gap-1.5">
-                                          <span className={item.type === 'milestone' ? 'text-amber-500' : 'text-blue-500'}>
-                                            {item.type === 'milestone' ? '◆' : '■'}
-                                          </span>
-                                          <span className="truncate" title={item.name}>{item.name}</span>
-                                          {predItem && (
-                                            <span className="text-[9px] text-slate-400 font-normal shrink-0" title={`Dépend de: ${predItem.name}`}>
-                                              (🔗 {predItem.name})
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="w-2/3 relative h-6 bg-slate-100 rounded-md overflow-hidden border border-slate-200/50 flex items-center">
-                                          <div className="absolute inset-0 flex justify-between pointer-events-none">
-                                            <div className="border-r border-slate-200/40 h-full w-1/4"></div>
-                                            <div className="border-r border-slate-200/40 h-full w-1/4"></div>
-                                            <div className="border-r border-slate-200/40 h-full w-1/4"></div>
-                                            <div className="border-r border-slate-200/40 h-full w-1/4"></div>
-                                          </div>
-                                          <div
-                                            className={`absolute h-4 rounded-md shadow-xs flex items-center justify-between px-1.5 text-[9px] text-white font-bold transition-all ${barColor}`}
-                                            style={{ left: `${leftPct}%`, width: `${widthPct}%`, minWidth: '24px' }}
-                                          >
-                                            <span className="truncate">
-                                              {item.type === 'task' ? `${item.progress}%` : (item.completed ? '✓' : '🎯')}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })
-                                )}
-                              </div>
-                            );
-                          })}
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Influence / Impact</label>
+                            <select
+                              value={shInfluence}
+                              onChange={(e) => setShInfluence(e.target.value as any)}
+                              className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-semibold"
+                            >
+                              <option value="low">Faible</option>
+                              <option value="medium">Moyenne</option>
+                              <option value="high">Élevée</option>
+                            </select>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex flex-wrap gap-4 text-[10px] text-slate-500 font-semibold pt-1 border-t border-slate-200/60">
-                        <div className="flex items-center gap-1"><span className="w-2 h-2 bg-indigo-500 rounded inline-block"></span> Tâche active</div>
-                        <div className="flex items-center gap-1"><span className="w-2 h-2 bg-emerald-600 rounded inline-block"></span> Tâche / Jalon validé</div>
-                        <div className="flex items-center gap-1"><span className="w-2 h-2 bg-amber-500 rounded inline-block"></span> Jalon en attente</div>
-                      </div>
-                    </div>
-                  )}
 
-                  {/* Phases rendering */}
-                  {ganttPhases.length === 0 ? (
-                    <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                      <p className="text-xs text-slate-400 font-medium">Aucune phase de planification n'a encore été définie.</p>
-                      <p className="text-[11px] text-slate-400 mt-1">Saisissez un nom de phase ci-dessus pour démarrer.</p>
+                        <button
+                          type="submit"
+                          className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded transition-colors shadow-2xs"
+                        >
+                          Ajouter la Partie Prenante
+                        </button>
+                      </form>
+
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {ganttPhases.map((phase) => (
-                        <div key={phase.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
-                          
-                          {/* Phase Header */}
-                          <div className="p-3 bg-slate-100 flex items-center justify-between border-b border-slate-200">
-                            <div className="flex items-center gap-2">
-                              <span className="p-1 bg-indigo-100 text-indigo-700 rounded">
-                                <Layers className="w-3.5 h-3.5" />
-                              </span>
-                              <span className="font-bold text-xs text-slate-800">{phase.name}</span>
-                            </div>
-                            <div className="flex items-center gap-3">
+
+                    {/* Right side column: Groups & Stakeholders List */}
+                    <div className="lg:col-span-2 space-y-4">
+                      {stakeholderGroups.map((group) => (
+                        <div key={group.id} className="bg-slate-50/50 rounded-xl border border-slate-200 p-4 space-y-3">
+                          <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                              <Users className="w-3.5 h-3.5 text-indigo-600" />
+                              {group.name}
+                            </h4>
+                            <div className="flex items-center gap-1">
                               <button
-                                onClick={() => setActivePhaseIdForNewItem(phase.id)}
-                                className="px-2 py-1 text-[10px] font-bold text-indigo-700 hover:bg-indigo-50 border border-indigo-200 rounded transition-all"
+                                onClick={() => setEditingGroup(group)}
+                                className="text-slate-400 hover:text-indigo-600 p-1 text-xs flex items-center gap-1 font-semibold"
+                                title="Modifier le groupe"
                               >
-                                + Ajouter tâche/jalon
+                                <Edit3 className="w-3.5 h-3.5" /> Modifier
                               </button>
                               <button
-                                onClick={() => handleRemovePhase(phase.id)}
+                                onClick={() => handleRemoveShGroup(group.id)}
                                 className="text-slate-400 hover:text-rose-600 p-1"
-                                title="Supprimer la phase"
+                                title="Supprimer le groupe"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </div>
 
-                          {/* Item insertion drawer inline */}
-                          {activePhaseIdForNewItem === phase.id && (
-                            <div className="p-4 bg-slate-50 border-b border-slate-200 space-y-4 text-xs">
-                              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                                <div className="sm:col-span-3">
-                                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Type d'élément</label>
-                                  <select
-                                    value={itemType}
-                                    onChange={(e) => setItemType(e.target.value as any)}
-                                    className="w-full text-xs px-2 py-1.5 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500"
-                                  >
-                                    <option value="task">💻 Tâche</option>
-                                    <option value="milestone">🎯 Jalon / Livrable</option>
-                                  </select>
-                                </div>
-                                <div className="sm:col-span-5">
-                                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Nom de l'élément</label>
-                                  <input
-                                    type="text"
-                                    required
-                                    placeholder="ex: Rédaction des spécifications, Livraison V1..."
-                                    value={itemName}
-                                    onChange={(e) => setItemName(e.target.value)}
-                                    className="w-full text-xs px-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500"
-                                  />
-                                </div>
-                                <div className="sm:col-span-4">
-                                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Assigné à</label>
-                                  <select
-                                    value={itemAssigned}
-                                    onChange={(e) => setItemAssigned(e.target.value)}
-                                    className="w-full text-xs px-2 py-1.5 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500"
-                                  >
-                                    <option value="">Sélectionner un collaborateur...</option>
-                                    <option value={project.manager}>{project.manager} (CP)</option>
-                                    {globalTeam.map(t => (
-                                      <option key={t.id} value={`${t.firstName} ${t.lastName}`}>{t.firstName} {t.lastName} ({t.role})</option>
-                                    ))}
-                                  </select>
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
-                                <div className="md:col-span-4">
-                                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Prédécesseur</label>
-                                  <select
-                                    value={itemPredecessorId}
-                                    onChange={(e) => setItemPredecessorId(e.target.value)}
-                                    className="w-full text-xs px-2 py-1.5 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-indigo-500"
-                                  >
-                                    <option value="">Aucun prédécesseur</option>
-                                    {ganttPhases.flatMap(p => p.items).map(item => (
-                                      <option key={item.id} value={item.id}>
-                                        {item.name} ({item.type === 'milestone' ? 'Jalon' : 'Tâche'})
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-
-                                <div className="md:col-span-4">
-                                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Date Début (Sélecteur ou Clavier)</label>
-                                  {renderDropdownDatePicker(itemStart || project.startDate || new Date().toISOString().split('T')[0], setItemStart)}
-                                </div>
-
-                                <div className="md:col-span-4">
-                                  <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Date Échéance (Sélecteur ou Clavier)</label>
-                                  {renderDropdownDatePicker(itemEnd || project.endDate || new Date().toISOString().split('T')[0], setItemEnd)}
-                                </div>
-                              </div>
-
-                              <div className="flex justify-end gap-2 border-t border-slate-200/60 pt-3">
-                                <button
-                                  type="button"
-                                  onClick={() => setActivePhaseIdForNewItem(null)}
-                                  className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg transition-colors cursor-pointer"
-                                >
-                                  Annuler
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleAddItemToPhase(phase.id)}
-                                  className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-colors shadow-xs cursor-pointer flex items-center gap-1"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                  Ajouter l'élément
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Phase items list */}
-                          <div className="p-3 space-y-2 text-xs">
-                            {phase.items.length === 0 ? (
-                              <p className="text-slate-400 italic text-[11px] py-2 pl-3">Aucune tâche ni jalon dans cette phase.</p>
+                          <div className="space-y-1.5">
+                            {group.stakeholders.length === 0 ? (
+                              <p className="text-xs text-slate-400 italic py-1">Aucune partie prenante dans ce groupe.</p>
                             ) : (
-                              phase.items.map((item) => (
-                                <div 
-                                  key={item.id}
-                                  className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-2.5 border border-slate-100 rounded-lg hover:bg-slate-50/50 gap-3"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    {item.type === 'milestone' ? (
-                                      <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-bold text-[8px] uppercase shrink-0">
-                                        Jalon / Livrable
-                                      </span>
-                                    ) : (
-                                      <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-bold text-[8px] uppercase shrink-0">
-                                        Tâche
-                                      </span>
-                                    )}
-                                    <span className="font-semibold text-slate-800">{item.name}</span>
+                              group.stakeholders.map((stk) => (
+                                <div key={stk.id} className="bg-white p-2.5 rounded-lg border border-slate-200 flex justify-between items-center text-xs">
+                                  <div className="space-y-0.5">
+                                    <span className="font-bold text-slate-900 block">{stk.name}</span>
+                                    <span className="text-[10px] text-slate-500">{stk.role}</span>
                                   </div>
-
-                                  <div className="flex flex-wrap items-center gap-4 text-slate-500 font-medium text-[11px]">
-                                    {item.predecessorId && (() => {
-                                      const pred = ganttPhases.flatMap(p => p.items).find(i => i.id === item.predecessorId);
-                                      return pred ? (
-                                        <span className="inline-flex items-center gap-1 text-[9px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 font-bold" title={`Dépend de: ${pred.name}`}>
-                                          🔗 Prédécesseur: {pred.name}
-                                        </span>
-                                      ) : null;
-                                    })()}
-                                    {item.assignedTo && (
-                                      <span className="flex items-center gap-1">
-                                        <User className="w-3 h-3 text-slate-400" /> {item.assignedTo}
-                                      </span>
-                                    )}
-                                    <span className="flex items-center gap-1 font-mono">
-                                      <Calendar className="w-3 h-3 text-slate-400" /> {formatDate(item.startDate)} → {formatDate(item.endDate)}
+                                  <div className="flex items-center gap-2">
+                                    <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full uppercase ${
+                                      stk.influence === 'high' ? 'bg-rose-100 text-rose-800' : stk.influence === 'medium' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'
+                                    }`}>
+                                      {stk.influence === 'high' ? 'High' : stk.influence === 'medium' ? 'Med' : 'Low'}
                                     </span>
-
-                                    {/* Action controller dependent on type */}
-                                    {item.type === 'task' ? (
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-mono">{item.progress}%</span>
-                                        <input
-                                          type="range"
-                                          min="0"
-                                          max="100"
-                                          step="10"
-                                          value={item.progress}
-                                          onChange={(e) => handleUpdateItemProgress(phase.id, item.id, Number(e.target.value))}
-                                          className="w-16 accent-indigo-600 h-1 rounded-lg cursor-pointer"
-                                        />
-                                      </div>
-                                    ) : (
-                                      <label className="flex items-center gap-1.5 cursor-pointer">
-                                        <input
-                                          type="checkbox"
-                                          checked={item.completed}
-                                          onChange={(e) => handleToggleMilestone(phase.id, item.id, e.target.checked)}
-                                          className="rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 w-3.5 h-3.5"
-                                        />
-                                        <span className={item.completed ? 'text-emerald-600 font-bold' : ''}>
-                                          {item.completed ? 'Validé' : 'À valider'}
-                                        </span>
-                                      </label>
-                                    )}
-
                                     <button
-                                      onClick={() => handleRemoveItem(phase.id, item.id)}
-                                      className="text-slate-400 hover:text-rose-600 p-0.5 rounded"
+                                      onClick={() => setEditingStakeholder({ groupId: group.id, stakeholder: stk })}
+                                      className="text-slate-400 hover:text-indigo-600 p-1"
+                                      title="Modifier"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleRemoveStakeholderFromGroup(group.id, stk.id)}
+                                      className="text-slate-400 hover:text-rose-600 p-1"
+                                      title="Supprimer"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                   </div>
-
                                 </div>
                               ))
                             )}
                           </div>
-
                         </div>
                       ))}
                     </div>
-                  )}
-
-                </div>
-              ) : (
-                /* WBS DYNAMIC COMPLETED MATRIX */
-                <div className="space-y-4">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Matrice WBS (Organigramme technique des tâches)</span>
-                  
-                  <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-4 font-sans text-xs">
-                    
-                    {/* WBS Root Level */}
-                    <div className="flex items-center gap-2 bg-slate-800 text-white p-2.5 rounded-lg font-bold w-fit shadow-xs">
-                      <Layers className="w-4 h-4" />
-                      <span>PROJET : {project.name}</span>
-                    </div>
-
-                    {/* Branches dynamic generation */}
-                    {ganttPhases.length === 0 ? (
-                      <p className="text-slate-400 italic pl-6">Aucune donnée de planification disponible pour modéliser le WBS.</p>
-                    ) : (
-                      <div className="pl-6 space-y-4 relative before:absolute before:left-2 before:top-0 before:bottom-0 before:w-0.5 before:bg-slate-300">
-                        {ganttPhases.map((phase, pIdx) => (
-                          <div key={phase.id} className="space-y-2 relative before:absolute before:left-[-16px] before:top-4 before:w-4 before:h-0.5 before:bg-slate-300">
-                            
-                            <div className="flex items-center gap-2 bg-indigo-50 p-2 border border-indigo-100 rounded-lg font-semibold text-indigo-900 w-fit">
-                              <ChevronRight className="w-3.5 h-3.5" />
-                              <span>{pIdx + 1}. {phase.name.toUpperCase()}</span>
-                            </div>
-
-                            <div className="pl-6 space-y-1.5 text-slate-600">
-                              {phase.items.length === 0 ? (
-                                <p className="text-slate-400 italic">└─ (Pas d'élément de travail)</p>
-                              ) : (
-                                phase.items.map((item, iIdx) => (
-                                  <div key={item.id} className="flex items-center gap-2 py-0.5 text-[11px]">
-                                    <span>└─ {pIdx + 1}.{iIdx + 1} {item.name}</span>
-                                    {item.type === 'milestone' ? (
-                                      <span className={`px-1 rounded text-[8px] font-bold uppercase ${item.completed ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                                        Jalon {item.completed ? 'Fait' : 'Attente'}
-                                      </span>
-                                    ) : (
-                                      <span className="text-[10px] text-slate-400 font-mono">
-                                        ({item.progress}%)
-                                      </span>
-                                    )}
-                                    {item.assignedTo && <span className="text-slate-400">[{item.assignedTo}]</span>}
-                                  </div>
-                                ))
-                              )}
-                            </div>
-
-                          </div>
-                        ))}
-                      </div>
-                    )}
 
                   </div>
                 </div>
               )}
+
             </div>
           )}
 
-          {/* TAB 3: ORGANISATION (RACI MATRIX) */}
-          {activeTab === 'organisation' && (
+          {/* TAB 2: MATRICE DE DÉCISION */}
+          {activeTab === 'decisionMatrix' && (
+            <DecisionMatrixTab project={project} onUpdateProject={updateProjectData} />
+          )}
+
+          {/* TAB 3: PLANIFICATION */}
+          {activeTab === 'planification' && (
             <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-slate-100 pb-3">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800">Matrice d'Organisation RACI</h3>
-                  <p className="text-xs text-slate-500">
-                    Définissez les rôles de responsabilité (R, A, C, I). Les jalons de la planification et vos parties prenantes complètent automatiquement cette matrice.
-                  </p>
-                </div>
-              </div>
-
-              {/* Explanations block */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200/60 text-[11px]">
-                <div className="p-2 border-l-4 border-indigo-600 bg-white rounded-r-md">
-                  <span className="font-bold text-indigo-700 block">R : Responsible (Réalisateur)</span>
-                  <p className="text-slate-500">Celui qui exécute la tâche.</p>
-                </div>
-                <div className="p-2 border-l-4 border-emerald-600 bg-white rounded-r-md">
-                  <span className="font-bold text-emerald-700 block">A : Accountable (Approbateur)</span>
-                  <p className="text-slate-500">Le responsable final ou signataire.</p>
-                </div>
-                <div className="p-2 border-l-4 border-amber-600 bg-white rounded-r-md">
-                  <span className="font-bold text-amber-700 block">C : Consulted (Consulté)</span>
-                  <p className="text-slate-500">Donne son avis ou expertise.</p>
-                </div>
-                <div className="p-2 border-l-4 border-slate-600 bg-white rounded-r-md">
-                  <span className="font-bold text-slate-700 block">I : Informed (Informé)</span>
-                  <p className="text-slate-500">Tenu au courant de l'avancement.</p>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                {/* Add Custom Row Form */}
-                <form onSubmit={handleAddCustomRaciRow} className="flex gap-2 max-w-md bg-slate-50 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ligne personnalisée (ex: Validation finale DSI)"
-                    value={newRaciRow}
-                    onChange={(e) => setNewRaciRow(e.target.value)}
-                    className="text-xs px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-750 text-slate-800 dark:text-slate-100 flex-1 focus:outline-hidden"
-                  />
-                  <button
-                    type="submit"
-                    className="px-3.5 py-1.5 bg-indigo-600 text-white font-bold text-xs rounded hover:bg-indigo-700 shrink-0 cursor-pointer"
-                  >
-                    Ajouter ligne
-                  </button>
-                </form>
-
-                {/* Show Hidden Rows Toggle */}
+              {/* Planification Sub-tabs */}
+              <div className="flex border-b border-slate-200 pb-2 gap-4">
                 <button
-                  type="button"
-                  onClick={() => setShowHiddenInRaci(!showHiddenInRaci)}
-                  className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${
-                    showHiddenInRaci 
-                      ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-900/60 dark:text-indigo-400' 
-                      : 'bg-white border-slate-200 dark:bg-slate-800 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                  onClick={() => setPlanificationSubTab('gantt')}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                    planificationSubTab === 'gantt'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
-                  {showHiddenInRaci ? (
-                    <>
-                      <Eye className="w-3.5 h-3.5 animate-pulse" />
-                      Affichage : Toutes les lignes (y compris masquées)
-                    </>
-                  ) : (
-                    <>
-                      <EyeOff className="w-3.5 h-3.5" />
-                      Affichage : Lignes actives uniquement (masquer inutiles)
-                    </>
-                  )}
-                  {hiddenRaciRows.length > 0 && (
-                    <span className="ml-1 px-1.5 py-0.2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-full text-[10px] font-bold">
-                      {hiddenRaciRows.length} masquée(s)
-                    </span>
-                  )}
+                  Planning & Gantt
                 </button>
-              </div>
-
-              {/* RACI Scrollable Table */}
-              <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-x-auto bg-white dark:bg-slate-900">
-                <table className="w-full text-left text-xs min-w-[640px]">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-850 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 uppercase font-semibold text-[10px]">
-                      <th className="py-3 px-4 min-w-[200px]">Livrables & Jalons</th>
-                      {getRaciParticipants().map(p => (
-                        <th key={p.id} className="py-3 px-4 text-center min-w-[120px]">
-                          <span className="block font-bold text-slate-800 dark:text-slate-200">{p.name}</span>
-                          <span className="block text-[8px] text-slate-400 dark:text-slate-500 capitalize">
-                            {p.type === 'manager' ? 'Chef de Projet' : 'Groupe Stakeholders'}
-                          </span>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-150 dark:divide-slate-800">
-                    {getRaciRows().map((rowName) => {
-                      const isHidden = hiddenRaciRows.includes(rowName);
-                      if (isHidden && !showHiddenInRaci) return null;
-
-                      return (
-                        <tr 
-                          key={rowName} 
-                          className={`hover:bg-slate-50/50 dark:hover:bg-slate-850/20 transition-colors ${
-                            isHidden ? 'opacity-40 line-through bg-slate-50/30 dark:bg-slate-850/10' : ''
-                          }`}
-                        >
-                          <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (isHidden) {
-                                  setHiddenRaciRows(hiddenRaciRows.filter(r => r !== rowName));
-                                } else {
-                                  setHiddenRaciRows([...hiddenRaciRows, rowName]);
-                                }
-                              }}
-                              className={`p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${
-                                isHidden ? 'text-rose-500' : 'text-slate-400 hover:text-slate-600'
-                              }`}
-                              title={isHidden ? "Afficher à nouveau dans la matrice" : "Masquer de la matrice (inutile pour ce projet)"}
-                            >
-                              {isHidden ? (
-                                <EyeOff className="w-3.5 h-3.5" />
-                              ) : (
-                                <Eye className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                            <span>{rowName}</span>
-                          </td>
-                          {getRaciParticipants().map((p) => {
-                            const currentVal = raciAssignments[rowName]?.[p.id] || '';
-                            return (
-                              <td key={p.id} className="py-2 px-3 text-center">
-                                <select
-                                  value={currentVal}
-                                  disabled={isHidden}
-                                  onChange={(e) => handleUpdateRaciCell(rowName, p.id, e.target.value)}
-                                  className="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded px-1.5 py-1 text-xs font-bold text-center w-16 focus:ring-1 focus:ring-indigo-500 focus:outline-hidden text-slate-800 dark:text-slate-100 disabled:opacity-50"
-                                >
-                                  <option value="">-</option>
-                                  <option value="R">R</option>
-                                  <option value="A">A</option>
-                                  <option value="C">C</option>
-                                  <option value="I">I</option>
-                                </select>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: RISQUES (heat-map & ledger) */}
-          {activeTab === 'risks' && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-sm font-bold text-slate-800">Registre et Gestion des Risques</h3>
-                <p className="text-xs text-slate-500">Cartographiez les risques du projet (Gravité x Probabilité) et planifiez des actions d'atténuation.</p>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                
-                {/* Visual 5x5 risk map */}
-                <div className="lg:col-span-4 bg-slate-50 p-4 rounded-xl border border-slate-200/70 flex flex-col items-center">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">Matrice 5x5 Probabilité vs Impact</span>
-                  
-                  <div className="flex flex-col gap-1 w-full max-w-[240px]">
-                    {[5, 4, 3, 2, 1].map((impact) => (
-                      <div key={impact} className="flex gap-1 h-8 items-center">
-                        <div className="w-5 text-[10px] font-bold text-slate-400 text-right">{impact}</div>
-                        {[1, 2, 3, 4, 5].map((prob) => {
-                          const score = prob * impact;
-                          let color = 'bg-emerald-100 hover:bg-emerald-200 border-emerald-200 text-emerald-800';
-                          if (score >= 12) {
-                            color = 'bg-rose-100 hover:bg-rose-200 border-rose-200 text-rose-800 font-bold';
-                          } else if (score >= 6) {
-                            color = 'bg-amber-100 hover:bg-amber-200 border-amber-200 text-amber-800';
-                          }
-
-                          const matchingRisks = risks.filter(r => r.prob === prob && r.impact === impact);
-
-                          return (
-                            <div 
-                              key={prob} 
-                              className={`flex-1 h-full border rounded-sm flex items-center justify-center text-[10px] relative transition-colors ${color}`}
-                              title={`Impact: ${impact}, Probabilité: ${prob} (Score: ${score})`}
-                            >
-                              {matchingRisks.length > 0 ? (
-                                <span className="absolute bg-slate-950 text-white rounded-full w-4.5 h-4.5 flex items-center justify-center font-bold text-[9px] shadow-sm animate-bounce">
-                                  {matchingRisks.length}
-                                </span>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ))}
-                    
-                    {/* Prob label row */}
-                    <div className="flex gap-1 h-4 items-center">
-                      <div className="w-5"></div>
-                      {[1, 2, 3, 4, 5].map((prob) => (
-                        <div key={prob} className="flex-1 text-center text-[10px] font-bold text-slate-400">
-                          P{prob}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <span className="text-[10px] text-slate-400 italic mt-3 text-center">Les ronds noirs indiquent vos risques reportés</span>
-                </div>
-
-                {/* Risk Ledger and Creator */}
-                <div className="lg:col-span-8 space-y-4">
-                  
-                  {/* Risk Register Table */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-semibold text-[10px]">
-                          <th className="py-2.5 px-3">Description du risque</th>
-                          <th className="py-2.5 px-3 text-center">P</th>
-                          <th className="py-2.5 px-3 text-center">G</th>
-                          <th className="py-2.5 px-3 text-center">Criticité</th>
-                          <th className="py-2.5 px-3">Mesure de Mitigation</th>
-                          <th className="py-2.5 px-3 text-center">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-150">
-                        {risks.length === 0 ? (
-                          <tr>
-                            <td colSpan={6} className="py-8 text-center text-slate-400 italic font-medium">
-                              Aucun risque identifié pour le moment.
-                            </td>
-                          </tr>
-                        ) : (
-                          risks.map((r) => {
-                            const score = r.prob * r.impact;
-                            let scoreBadge = 'bg-emerald-50 text-emerald-700 border-emerald-100';
-                            if (score >= 12) scoreBadge = 'bg-rose-50 text-rose-700 border-rose-100 font-bold';
-                            else if (score >= 6) scoreBadge = 'bg-amber-50 text-amber-700 border-amber-100';
-
-                            return (
-                              <tr key={r.id} className="hover:bg-slate-50/50">
-                                <td className="py-3 px-3 font-semibold text-slate-800">{r.desc}</td>
-                                <td className="py-3 px-3 text-center font-mono font-bold">{r.prob}</td>
-                                <td className="py-3 px-3 text-center font-mono font-bold">{r.impact}</td>
-                                <td className="py-3 px-3 text-center">
-                                  <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] border ${scoreBadge}`}>
-                                    {score} / 25
-                                  </span>
-                                </td>
-                                <td className="py-3 px-3 text-slate-600 italic text-[11px]">{r.mitigation}</td>
-                                <td className="py-3 px-3 text-center">
-                                  <button
-                                    onClick={() => handleDeleteRisk(r.id)}
-                                    className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Add New Risk Form */}
-                  <form onSubmit={handleAddRisk} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
-                    <span className="text-xs font-bold text-slate-700 block">Signaler un nouveau risque</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                      <div className="sm:col-span-6">
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Description</label>
-                        <input
-                          type="text"
-                          required
-                          value={newRiskDesc}
-                          onChange={(e) => setNewRiskDesc(e.target.value)}
-                          placeholder="ex: Perte de connectivité API, Absence d'un expert technique..."
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                        />
-                      </div>
-                      
-                      <div className="sm:col-span-3">
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Probabilité (1-5)</label>
-                        <select
-                          value={newRiskProb}
-                          onChange={(e) => setNewRiskProb(Number(e.target.value))}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
-                        >
-                          <option value="1">1 - Très improbable</option>
-                          <option value="2">2 - Peu probable</option>
-                          <option value="3">3 - Possible</option>
-                          <option value="4">4 - Très probable</option>
-                          <option value="5">5 - Quasi-certitude</option>
-                        </select>
-                      </div>
-
-                      <div className="sm:col-span-3">
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Impact / Gravité (1-5)</label>
-                        <select
-                          value={newRiskImpact}
-                          onChange={(e) => setNewRiskImpact(Number(e.target.value))}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
-                        >
-                          <option value="1">1 - Négligeable</option>
-                          <option value="2">2 - Mineur</option>
-                          <option value="3">3 - Majeur</option>
-                          <option value="4">4 - Critique</option>
-                          <option value="5">5 - Catastrophique</option>
-                        </select>
-                      </div>
-
-                      <div className="sm:col-span-12">
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Plan de mitigation / Parade préventive</label>
-                        <input
-                          type="text"
-                          value={newRiskMitigation}
-                          onChange={(e) => setNewRiskMitigation(e.target.value)}
-                          placeholder="ex: Établir des sauvegardes régulières, Prévoir un ingénieur suppléant..."
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-xs flex items-center gap-1.5"
-                    >
-                      <Plus className="w-4 h-4" /> Ajouter le risque
-                    </button>
-                  </form>
-                </div>
-
-              </div>
-            </div>
-          )}
-
-          {/* TAB 5: BUDGET (ORGANIZED GROUPS & EXPENSES) */}
-          {activeTab === 'budget' && (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-slate-100 pb-3">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800">Suivi Budgétaire Structuré</h3>
-                  <p className="text-xs text-slate-500">Organisez vos coûts en créant des groupes de dépenses (ex: Prestations, Matériel, Cloud). Le budget total est calculé automatiquement.</p>
-                </div>
-              </div>
-
-              {/* Group management controller */}
-              <form onSubmit={handleAddBudgetGroup} className="flex gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200 max-w-md">
-                <input
-                  type="text"
-                  required
-                  placeholder="Nom de groupe (ex: Ressources Humaines)"
-                  value={newGroupName}
-                  onChange={(e) => setNewGroupName(e.target.value)}
-                  className="text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white flex-1 focus:outline-hidden"
-                />
                 <button
-                  type="submit"
-                  className="px-3.5 py-1.5 bg-indigo-600 text-white font-bold text-xs rounded hover:bg-indigo-700 shrink-0 cursor-pointer"
+                  onClick={() => setPlanificationSubTab('workload')}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                    planificationSubTab === 'workload'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
                 >
-                  Créer le groupe
+                  <Clock className="w-3.5 h-3.5" />
+                  Gestion du Temps & Charge
                 </button>
-              </form>
+              </div>
 
-              {budgetGroups.length === 0 ? (
-                <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                  <p className="text-xs text-slate-400 font-medium">Aucun groupe de dépenses n'a encore été créé.</p>
-                  <p className="text-[11px] text-slate-400 mt-1">Créez votre premier groupe ci-dessus pour détailler votre budget.</p>
-                </div>
+              {planificationSubTab === 'workload' ? (
+                <WorkloadTab project={project} globalTeam={globalTeam} onUpdateProject={updateProjectData} />
               ) : (
                 <div className="space-y-6">
-                  {budgetGroups.map((group) => {
-                    const groupPlanned = group.expenses.reduce((s, e) => s + e.planned, 0);
-                    const groupSpent = group.expenses.reduce((s, e) => s + e.spent, 0);
-                    const isGroupOver = groupSpent > groupPlanned;
+                  {/* Create Phase form */}
+                  <form onSubmit={handleAddPhase} className="flex gap-2 max-w-md">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Nom de la nouvelle phase (ex: Phase 3 - Recette)"
+                      value={newPhaseName}
+                      onChange={(e) => setNewPhaseName(e.target.value)}
+                      className="text-xs px-3 py-1.5 border border-slate-300 rounded-lg bg-white flex-1"
+                    />
+                    <button
+                      type="submit"
+                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs"
+                    >
+                      Ajouter Phase
+                    </button>
+                  </form>
 
-                    return (
-                      <div key={group.id} className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
-                        
-                        {/* Group Header */}
-                        <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  {/* Gantt phases table */}
+                  <div className="space-y-6">
+                    {ganttPhases.map((phase) => (
+                      <div key={phase.id} className="bg-slate-50/50 rounded-xl border border-slate-200 p-4 space-y-3">
+                        <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                          <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                            <Layers className="w-4 h-4 text-indigo-600" />
+                            {phase.name}
+                          </h4>
                           <div className="flex items-center gap-2">
-                            <span className="p-1 bg-indigo-50 text-indigo-700 rounded">
-                              <PiggyBank className="w-4 h-4" />
-                            </span>
-                            <span className="font-bold text-xs text-slate-800">{group.name}</span>
-                          </div>
-                          
-                          <div className="flex items-center gap-3 text-xs font-mono">
-                            <span className="text-slate-500">Prévu: <strong className="text-slate-800">{formatEuro(groupPlanned)}</strong></span>
-                            <span className="text-slate-500">Consommé: <strong className={isGroupOver ? 'text-rose-600 font-bold' : 'text-slate-800'}>{formatEuro(groupSpent)}</strong></span>
                             <button
-                              onClick={() => setExpenseGroupToAddTo(group.id)}
-                              className="px-2 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded text-[10px] font-semibold hover:bg-indigo-100"
+                              onClick={() => setActivePhaseIdForNewItem(phase.id)}
+                              className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] rounded transition-colors flex items-center gap-1"
                             >
-                              + Ajouter dépense
+                              <Plus className="w-3 h-3" /> Ajouter Tâche/Jalon
                             </button>
                             <button
-                              onClick={() => handleRemoveBudgetGroup(group.id)}
+                              onClick={() => handleRemovePhase(phase.id)}
                               className="text-slate-400 hover:text-rose-600 p-1"
-                              title="Supprimer le groupe"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </div>
 
-                        {/* Inline expense addition form */}
-                        {expenseGroupToAddTo === group.id && (
-                          <div className="p-3 bg-slate-50/50 border-b border-slate-200 grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs">
-                            <div className="flex flex-col">
-                              <label className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Poste de dépense</label>
+                        {/* Add Item to Phase form */}
+                        {activePhaseIdForNewItem === phase.id && (
+                          <div className="bg-white p-3 rounded-lg border border-indigo-200 space-y-3 shadow-xs">
+                            <h5 className="text-xs font-bold text-indigo-900">Nouvel élément dans {phase.name}</h5>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                              <select
+                                value={itemType}
+                                onChange={(e) => setItemType(e.target.value as any)}
+                                className="px-2 py-1.5 border border-slate-300 rounded bg-white font-semibold"
+                              >
+                                <option value="task">■ Tâche</option>
+                                <option value="milestone">◆ Jalon</option>
+                              </select>
+
                               <input
                                 type="text"
-                                placeholder="ex: Serveurs AWS, Consultant..."
-                                value={newExpenseName}
-                                onChange={(e) => setNewExpenseName(e.target.value)}
-                                className="px-2.5 py-1.5 border border-slate-300 rounded bg-white text-xs"
+                                required
+                                placeholder="Intitulé"
+                                value={itemName}
+                                onChange={(e) => setItemName(e.target.value)}
+                                className="px-2 py-1.5 border border-slate-300 rounded bg-white"
                               />
+
+                              {/* Multi-select for assignees */}
+                              <div className="p-1 border border-slate-300 rounded bg-white text-[10px] max-h-20 overflow-y-auto">
+                                <span className="font-bold text-slate-500 block mb-0.5">Assignés :</span>
+                                {globalTeam.map((m) => {
+                                  const checked = itemAssignedArray.includes(m.id);
+                                  return (
+                                    <label key={m.id} className="flex items-center gap-1 font-semibold cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={(e) => {
+                                          if (e.target.checked) setItemAssignedArray([...itemAssignedArray, m.id]);
+                                          else setItemAssignedArray(itemAssignedArray.filter((id) => id !== m.id));
+                                        }}
+                                      />
+                                      <span>{m.firstName} {m.lastName}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+
+                              <div>
+                                <span className="text-[9px] font-bold text-slate-400 block">Prédecesseur:</span>
+                                <select
+                                  value={itemPredecessorId}
+                                  onChange={(e) => {
+                                    setItemPredecessorId(e.target.value);
+                                    handlePredecessorChange(e.target.value, setItemStart);
+                                  }}
+                                  className="w-full px-2 py-1 border border-slate-300 rounded bg-white text-[10px]"
+                                >
+                                  <option value="">Aucun</option>
+                                  {allGanttItems.map((gi) => (
+                                    <option key={gi.id} value={gi.id}>{gi.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <span className="text-[9px] font-bold text-slate-400 block">Début:</span>
+                                <input
+                                  type="date"
+                                  value={itemStart}
+                                  onChange={(e) => setItemStart(e.target.value)}
+                                  className="w-full px-2 py-1 border border-slate-300 rounded bg-white text-[10px]"
+                                />
+                              </div>
+
+                              <div>
+                                <span className="text-[9px] font-bold text-slate-400 block">Fin (Optionnel):</span>
+                                <input
+                                  type="date"
+                                  value={itemEnd}
+                                  onChange={(e) => setItemEnd(e.target.value)}
+                                  className="w-full px-2 py-1 border border-slate-300 rounded bg-white text-[10px]"
+                                />
+                              </div>
                             </div>
-                            <div className="flex flex-col">
-                              <label className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Quantité</label>
-                              <input
-                                type="number"
-                                min="1"
-                                placeholder="ex: 1"
-                                value={newExpenseQuantity}
-                                onChange={(e) => setNewExpenseQuantity(e.target.value)}
-                                className="px-2.5 py-1.5 border border-slate-300 rounded bg-white text-xs"
-                              />
-                            </div>
-                            <div className="flex flex-col">
-                              <label className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Prix Unitaire Prévu (€)</label>
-                              <input
-                                type="number"
-                                placeholder="ex: 1200"
-                                value={newExpenseUnitPricePlanned}
-                                onChange={(e) => setNewExpenseUnitPricePlanned(e.target.value)}
-                                className="px-2.5 py-1.5 border border-slate-300 rounded bg-white text-xs"
-                              />
-                            </div>
-                            <div className="flex flex-col">
-                              <label className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Prix Unitaire Réel (€)</label>
-                              <input
-                                type="number"
-                                placeholder="ex: 1150"
-                                value={newExpenseUnitPriceSpent}
-                                onChange={(e) => setNewExpenseUnitPriceSpent(e.target.value)}
-                                className="px-2.5 py-1.5 border border-slate-300 rounded bg-white text-xs"
-                              />
-                            </div>
-                            <div className="flex items-end gap-1.5">
+
+                            <div className="flex justify-end gap-2 pt-1">
                               <button
-                                onClick={() => handleAddExpenseToGroup(group.id)}
-                                className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold text-xs"
+                                type="button"
+                                onClick={() => setActivePhaseIdForNewItem(null)}
+                                className="px-2.5 py-1 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded"
                               >
-                                Enregistrer
+                                Annuler
                               </button>
                               <button
-                                onClick={() => setExpenseGroupToAddTo(null)}
-                                className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded font-bold"
+                                type="button"
+                                onClick={() => handleAddItemToPhase(phase.id)}
+                                className="px-3 py-1 text-xs font-bold bg-indigo-600 text-white rounded hover:bg-indigo-700"
                               >
-                                X
+                                Enregistrer
                               </button>
                             </div>
                           </div>
                         )}
 
-                        {/* Expense list */}
-                        <div className="p-3">
-                          {group.expenses.length === 0 ? (
-                            <p className="text-slate-400 italic text-[11px] py-2 text-center">Aucune dépense répertoriée dans ce groupe.</p>
+                        {/* Phase Items List */}
+                        <div className="space-y-1.5">
+                          {phase.items.length === 0 ? (
+                            <p className="text-xs text-slate-400 italic">Aucune tâche ou jalon dans cette phase.</p>
                           ) : (
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-left text-xs">
-                                <thead>
-                                  <tr className="border-b border-slate-150 text-slate-400 font-semibold text-[9px] uppercase">
-                                    <th className="py-1.5 px-2">Description</th>
-                                    <th className="py-1.5 px-2 text-center">Qté</th>
-                                    <th className="py-1.5 px-2 text-right">P.U. Prévu</th>
-                                    <th className="py-1.5 px-2 text-right">P.U. Réel</th>
-                                    <th className="py-1.5 px-2 text-right">Total Prévu</th>
-                                    <th className="py-1.5 px-2 text-right">Total Consommé</th>
-                                    <th className="py-1.5 px-2 text-center">Statut</th>
-                                    <th className="py-1.5 px-2 text-center">Actions</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                  {group.expenses.map((exp) => {
-                                    const over = exp.spent > exp.planned;
-                                    const q = exp.quantity || 1;
-                                    const upP = exp.unitPricePlanned !== undefined ? exp.unitPricePlanned : exp.planned / q;
-                                    const upS = exp.unitPriceSpent !== undefined ? exp.unitPriceSpent : exp.spent / q;
+                            phase.items.map((item) => (
+                              <div key={item.id} className="bg-white p-2.5 rounded-lg border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                                <div className="flex items-center gap-2">
+                                  {item.type === 'milestone' ? (
+                                    <input
+                                      type="checkbox"
+                                      checked={item.completed}
+                                      onChange={(e) => handleToggleMilestone(phase.id, item.id, e.target.checked)}
+                                      className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4"
+                                    />
+                                  ) : (
+                                    <span className="font-mono text-indigo-600 font-bold w-12 text-[10px] text-right shrink-0">
+                                      {item.progress}%
+                                    </span>
+                                  )}
 
-                                    return (
-                                      <tr key={exp.id} className="hover:bg-slate-50/50">
-                                        <td className="py-2.5 px-2 font-medium text-slate-800">{exp.name}</td>
-                                        <td className="py-2.5 px-2 text-center font-mono text-slate-600">{q}</td>
-                                        <td className="py-2.5 px-2 text-right font-mono text-slate-600">{formatEuro(upP)}</td>
-                                        <td className="py-2.5 px-2 text-right font-mono text-slate-600">{formatEuro(upS)}</td>
-                                        <td className="py-2.5 px-2 text-right font-mono font-semibold text-slate-800">{formatEuro(exp.planned)}</td>
-                                        <td className={`py-2.5 px-2 text-right font-mono font-semibold ${over ? 'text-rose-600' : 'text-slate-850'}`}>{formatEuro(exp.spent)}</td>
-                                        <td className="py-2.5 px-2 text-center">
-                                          <span className={`inline-flex px-1.5 py-0.5 rounded text-[8px] font-bold uppercase border ${
-                                            over ? 'bg-rose-50 border-rose-100 text-rose-700' : 'bg-emerald-50 border-emerald-100 text-emerald-700'
-                                          }`}>
-                                            {over ? 'Dépassement' : 'OK'}
-                                          </span>
-                                        </td>
-                                        <td className="py-2.5 px-2 text-center">
-                                          <button
-                                            onClick={() => handleRemoveExpenseFromGroup(group.id, exp.id)}
-                                            className="text-slate-400 hover:text-rose-600 p-1 rounded"
-                                          >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          </button>
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
+                                  <div>
+                                    <span className="font-bold text-slate-800">
+                                      {item.type === 'milestone' ? '◆ ' : '■ '}{item.name}
+                                    </span>
+                                    <div className="text-[10px] text-slate-500 flex items-center gap-2">
+                                      <span>Du {formatDate(item.startDate)} au {formatDate(item.endDate)}</span>
+                                      {item.predecessorId && (
+                                        <span className="bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded font-bold">
+                                          Prédécesseur défini
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                  {item.type === 'task' && (
+                                    <input
+                                      type="range"
+                                      min={0}
+                                      max={100}
+                                      step={5}
+                                      value={item.progress}
+                                      onChange={(e) => handleUpdateTaskProgress(phase.id, item.id, Number(e.target.value))}
+                                      className="w-24 accent-indigo-600"
+                                    />
+                                  )}
+
+                                  <button
+                                    onClick={() => setEditingGanttItem({ phaseId: phase.id, item: { ...item } })}
+                                    className="p-1 text-slate-400 hover:text-indigo-600"
+                                    title="Modifier la tâche"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleRemoveGanttItem(phase.id, item.id)}
+                                    className="p-1 text-slate-400 hover:text-rose-600"
+                                    title="Supprimer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))
                           )}
                         </div>
 
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
                 </div>
               )}
-
             </div>
           )}
-                           {/* TAB 6: COMMUNICATION */}
-          {activeTab === 'communication' && (() => {
-            // Combine meetings and staff coms chronologically
-            const comStartMs = new Date(project.startDate || '2026-01-01').getTime();
-            const comEndMs = new Date(project.endDate || '2026-12-31').getTime();
-            const comTotalDuration = Math.max(comEndMs - comStartMs, 86400000);
 
-            const timelineItems = [
-              ...meetings.map(m => ({ id: m.id, title: m.title, date: m.date, type: 'meeting' as const, status: m.status, details: m.objectives })),
-              ...staffCommunications.map(c => ({ id: c.id, title: c.title, date: c.date, type: 'comm' as const, status: c.status, details: `Cible: ${c.targetAudience}` }))
-            ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-            return (
-              <div className="space-y-6">
-                {/* Visual Gantt timeline of Communication events */}
-                <div className="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">Chronogramme Temporel du Plan de Com</span>
-                      <p className="text-[11px] text-slate-500 mt-0.5">Visualisation temporelle des réunions de gouvernance et actions de communication par rapport aux jalons du projet.</p>
-                    </div>
-                    <div className="flex gap-3 text-[10px] font-bold">
-                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-blue-500 rounded"></span> Réunion</span>
-                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-purple-500 rounded"></span> Communication</span>
-                    </div>
-                  </div>
-
-                  {timelineItems.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic text-center py-6 bg-white border border-dashed border-slate-200 rounded-lg">Aucun événement de communication ou réunion n'a encore été planifié.</p>
-                  ) : (
-                    <div className="bg-white border border-slate-150 rounded-lg p-3 space-y-2 max-h-64 overflow-y-auto">
-                      {timelineItems.map(item => {
-                        const itemMs = new Date(item.date).getTime();
-                        let leftPct = ((itemMs - comStartMs) / comTotalDuration) * 100;
-                        if (leftPct < 0) leftPct = 0;
-                        if (leftPct > 100) leftPct = 95;
-
-                        const isMeeting = item.type === 'meeting';
-                        const badgeColor = isMeeting ? 'bg-blue-500 hover:bg-blue-600' : 'bg-purple-500 hover:bg-purple-600';
-
-                        return (
-                          <div key={item.id} className="flex items-center text-[11px] py-1 px-1.5 rounded hover:bg-slate-50 transition-colors">
-                            <div className="w-1/3 shrink-0 pr-3 font-semibold text-slate-700 truncate flex items-center gap-1.5">
-                              <span className={isMeeting ? 'text-blue-500' : 'text-purple-500 font-bold'}>
-                                {isMeeting ? '📅' : '📢'}
-                              </span>
-                              <span className="truncate" title={item.title}>{item.title}</span>
-                            </div>
-                            <div className="w-2/3 relative h-6 bg-slate-55 rounded-md flex items-center border border-slate-100">
-                              <div className="absolute inset-0 flex justify-between pointer-events-none">
-                                <div className="border-r border-slate-100 h-full w-1/4"></div>
-                                <div className="border-r border-slate-100 h-full w-1/4"></div>
-                                <div className="border-r border-slate-100 h-full w-1/4"></div>
-                                <div className="border-r border-slate-100 h-full w-1/4"></div>
-                              </div>
-                              <div
-                                className={`absolute h-4.5 rounded px-2 text-[9px] text-white font-bold flex items-center gap-1.5 shadow-xs transition-all ${badgeColor}`}
-                                style={{ left: `${leftPct}%`, transform: 'translateX(-50%)', minWidth: '110px' }}
-                                title={`${item.title} (${item.date}) - ${item.details}`}
-                              >
-                                <span className="truncate">{formatDate(item.date)}</span>
-                                <span className="text-[8px] opacity-90 shrink-0">
-                                  {item.status === 'done' ? '✓' : '●'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Sub-tab selection */}
-                <div className="flex border-b border-slate-200 gap-1">
-                  <button
-                    onClick={() => setCommSubTab('meetings')}
-                    className={`px-4 py-2 text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
-                      commSubTab === 'meetings'
-                        ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30'
-                        : 'border-transparent text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                    Événements & Réunions de Gouvernance
-                  </button>
-                  <button
-                    onClick={() => setCommSubTab('deliverables')}
-                    className={`px-4 py-2 text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
-                      commSubTab === 'deliverables'
-                        ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30'
-                        : 'border-transparent text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    <Send className="w-3.5 h-3.5 text-purple-500" />
-                    Actions de Communication & Rapports
-                  </button>
-                </div>
-
-                {/* Inner Content panels based on sub-tab */}
-                {commSubTab === 'meetings' ? (
-                  <div className="space-y-4">
-                    <div className="border-b border-slate-100 pb-1">
-                      <h4 className="text-xs font-bold text-slate-700">Planification des Réunions de Gouvernance</h4>
-                      <p className="text-[11px] text-slate-500">Prévoyez les réunions critiques (Comités de projet, COPIL, revues) et consignez leur statut.</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                      {/* Meeting Form */}
-                      <form onSubmit={handleAddMeeting} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3 self-start">
-                        <span className="text-xs font-bold text-slate-700 block">Créer une Réunion</span>
-                        
-                        <div className="space-y-2.5 text-xs">
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Titre de la réunion</label>
-                            <input
-                              type="text"
-                              required
-                              placeholder="ex: COPIL Mensuel"
-                              value={meetingTitle}
-                              onChange={(e) => setMeetingTitle(e.target.value)}
-                              className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Date</label>
-                            <input
-                              type="date"
-                              value={meetingDate}
-                              onChange={(e) => setMeetingDate(e.target.value)}
-                              className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Objectifs de Gouvernance</label>
-                            <textarea
-                              placeholder="ex: Arbitrage budgétaire et validation du jalon technique"
-                              value={meetingObjectives}
-                              onChange={(e) => setMeetingObjectives(e.target.value)}
-                              className="w-full text-xs px-2.5 py-1 border border-slate-300 rounded bg-white h-16"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Statut</label>
-                            <select
-                              value={meetingStatus}
-                              onChange={(e) => setMeetingStatus(e.target.value as any)}
-                              className="w-full text-xs px-2 py-1.5 bg-white border border-slate-300 rounded"
-                            >
-                              <option value="planned">Planifiée</option>
-                              <option value="done">Réalisée</option>
-                              <option value="delayed">Reportée</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <button
-                          type="submit"
-                          className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded shadow-xs cursor-pointer"
-                        >
-                          Planifier la réunion
-                        </button>
-                      </form>
-
-                      {/* Meetings List */}
-                      <div className="lg:col-span-2 border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
-                        <table className="w-full text-left text-xs">
-                          <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-semibold text-[10px]">
-                              <th className="py-2.5 px-3">Réunion / Sujet</th>
-                              <th className="py-2.5 px-3">Date</th>
-                              <th className="py-2.5 px-3">Objectifs clés</th>
-                              <th className="py-2.5 px-3 text-center">Statut</th>
-                              <th className="py-2.5 px-3 text-center"></th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-150">
-                            {meetings.length === 0 ? (
-                              <tr>
-                                <td colSpan={5} className="py-8 text-center text-slate-400 italic">Aucune réunion de gouvernance programmée.</td>
-                              </tr>
-                            ) : (
-                              meetings.map((m) => (
-                                <tr key={m.id} className="hover:bg-slate-50/50">
-                                  <td className="py-3 px-3 font-bold text-slate-800">{m.title}</td>
-                                  <td className="py-3 px-3 font-mono text-slate-600">{formatDate(m.date)}</td>
-                                  <td className="py-3 px-3 text-slate-500">{m.objectives}</td>
-                                  <td className="py-3 px-3 text-center">
-                                    <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border ${
-                                      m.status === 'done' 
-                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-100'
-                                        : m.status === 'delayed'
-                                        ? 'bg-rose-50 text-rose-800 border-rose-100'
-                                        : 'bg-indigo-50 text-indigo-800 border-indigo-100'
-                                    }`}>
-                                      {m.status === 'done' ? 'Fait' : m.status === 'delayed' ? 'Reporté' : 'Planifié'}
-                                    </span>
-                                  </td>
-                                  <td className="py-3 px-3 text-center">
-                                    <button
-                                      onClick={() => handleDeleteMeeting(m.id)}
-                                      className="text-slate-400 hover:text-rose-600 p-0.5"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="border-b border-slate-100 pb-1">
-                      <h4 className="text-xs font-bold text-slate-700">Actions de Communication & Conduite du Changement</h4>
-                      <p className="text-[11px] text-slate-500">Planifiez les actions de communication, rapports périodiques, ou newsletters destinés aux employés et parties prenantes.</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                      {/* Comm Form */}
-                      <form onSubmit={handleAddStaffComm} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3 self-start">
-                        <span className="text-xs font-bold text-slate-700 block">Créer une Action</span>
-                        
-                        <div className="space-y-2.5 text-xs">
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Sujet de Communication / Rapport</label>
-                            <input
-                              type="text"
-                              required
-                              placeholder="ex: Newsletter de démarrage, Rapport d'avancement"
-                              value={commTitle}
-                              onChange={(e) => setCommTitle(e.target.value)}
-                              className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Public Cible / Destinataire</label>
-                            <input
-                              type="text"
-                              placeholder="ex: Tous les employés, Comité Métier"
-                              value={commAudience}
-                              onChange={(e) => setCommAudience(e.target.value)}
-                              className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Date de Diffusion Prévue</label>
-                            <input
-                              type="date"
-                              value={commDate}
-                              onChange={(e) => setCommDate(e.target.value)}
-                              className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Statut</label>
-                            <select
-                              value={commStatus}
-                              onChange={(e) => setCommStatus(e.target.value as any)}
-                              className="w-full text-xs px-2 py-1.5 bg-white border border-slate-300 rounded"
-                            >
-                              <option value="planned">Planifiée</option>
-                              <option value="done">Réalisée</option>
-                              <option value="delayed">Reportée</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <button
-                          type="submit"
-                          className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded shadow-xs cursor-pointer"
-                        >
-                          Planifier l'Action
-                        </button>
-                      </form>
-
-                      {/* Actions List */}
-                      <div className="lg:col-span-2 border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
-                        <table className="w-full text-left text-xs">
-                          <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-semibold text-[10px]">
-                              <th className="py-2.5 px-3">Sujet de Communication</th>
-                              <th className="py-2.5 px-3">Cible / Audience</th>
-                              <th className="py-2.5 px-3">Planifié le</th>
-                              <th className="py-2.5 px-3 text-center">Statut</th>
-                              <th className="py-2.5 px-3 text-center"></th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-150">
-                            {staffCommunications.length === 0 ? (
-                              <tr>
-                                <td colSpan={5} className="py-8 text-center text-slate-400 italic">Aucune action de communication ou rapport de configuré.</td>
-                              </tr>
-                            ) : (
-                              staffCommunications.map((c) => (
-                                <tr key={c.id} className="hover:bg-slate-50/50">
-                                  <td className="py-3 px-3 font-semibold text-slate-800">{c.title}</td>
-                                  <td className="py-3 px-3 text-slate-600 font-medium">{c.targetAudience}</td>
-                                  <td className="py-3 px-3 font-mono text-slate-500">{formatDate(c.date)}</td>
-                                  <td className="py-3 px-3 text-center">
-                                    <span className={`inline-flex px-1.5 py-0.5 rounded text-[8px] font-bold uppercase border ${
-                                      c.status === 'done' 
-                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-100'
-                                        : c.status === 'delayed'
-                                        ? 'bg-rose-50 text-rose-800 border-rose-100'
-                                        : 'bg-indigo-50 text-indigo-800 border-indigo-100'
-                                    }`}>
-                                      {c.status === 'done' ? 'Diffusé' : c.status === 'delayed' ? 'Reporté' : 'Planifié'}
-                                    </span>
-                                  </td>
-                                  <td className="py-3 px-3 text-center">
-                                    <button
-                                      onClick={() => handleDeleteStaffComm(c.id)}
-                                      className="text-slate-400 hover:text-rose-600 p-0.5"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* TAB 7: KPIS */}
-          {activeTab === 'kpis' && (
+          {/* TAB 4: RACI */}
+          {activeTab === 'organisation' && (
             <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-slate-100 pb-3">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 pb-3">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800">Indicateurs Clés de Performance (KPI)</h3>
-                  <p className="text-xs text-slate-500">Configurez des KPIs sur-mesure pour mesurer la performance réelle en fonction de vos objectifs.</p>
+                  <h3 className="text-sm font-bold text-slate-800">Matrice de Responsabilités (RACI)</h3>
+                  <p className="text-xs text-slate-500">
+                    Définissez la matrice R (Réalise), A (Approuve), C (Consulté), I (Informé) par ligne de tâche/jalon.
+                  </p>
+                </div>
+              </div>
+
+              {/* Add Custom Row */}
+              <form onSubmit={handleAddCustomRaciRow} className="flex gap-2 max-w-md">
+                <input
+                  type="text"
+                  required
+                  placeholder="Ajouter un livrable/activité spécifique..."
+                  value={newRaciRow}
+                  onChange={(e) => setNewRaciRow(e.target.value)}
+                  className="text-xs px-3 py-1.5 border border-slate-300 rounded-lg bg-white flex-1"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs"
+                >
+                  Ajouter Ligne
+                </button>
+              </form>
+
+              {/* RACI Table */}
+              <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-700 uppercase font-bold text-[10px]">
+                      <th className="p-3 border-b border-slate-200">Activité / Livrable</th>
+                      {getRaciParticipants().map((part) => (
+                        <th key={part.id} className="p-3 border-b border-slate-200 text-center">
+                          {part.name}
+                        </th>
+                      ))}
+                      <th className="p-3 border-b border-slate-200 text-center w-12">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {getRaciRows().map((rowName) => (
+                      <tr key={rowName} className="hover:bg-slate-50/60 border-b border-slate-100">
+                        <td className="p-3 font-semibold text-slate-800">{rowName}</td>
+                        {getRaciParticipants().map((part) => {
+                          const currentVal = raciAssignments[rowName]?.[part.id] || '';
+                          return (
+                            <td key={part.id} className="p-2 text-center">
+                              <select
+                                value={currentVal}
+                                onChange={(e) => handleUpdateRaciCell(rowName, part.id, e.target.value)}
+                                className={`text-xs font-bold px-2 py-1 border rounded bg-white ${
+                                  currentVal === 'R' ? 'text-indigo-600 border-indigo-300 bg-indigo-50/40' :
+                                  currentVal === 'A' ? 'text-emerald-600 border-emerald-300 bg-emerald-50/40' :
+                                  currentVal === 'C' ? 'text-amber-600 border-amber-300 bg-amber-50/40' :
+                                  currentVal === 'I' ? 'text-slate-600 border-slate-300 bg-slate-50/40' : ''
+                                }`}
+                              >
+                                <option value="">-</option>
+                                <option value="R">R (Réalise)</option>
+                                <option value="A">A (Approuve)</option>
+                                <option value="C">C (Consulté)</option>
+                                <option value="I">I (Informé)</option>
+                              </select>
+                            </td>
+                          );
+                        })}
+                        <td className="p-2 text-center">
+                          <button
+                            onClick={() => handleDeleteCustomRaciRow(rowName)}
+                            className="text-slate-400 hover:text-rose-600 p-1"
+                            title="Supprimer la ligne"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: RISQUES */}
+          {activeTab === 'risks' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Registre des Risques du Projet</h3>
+                  <p className="text-xs text-slate-500">Évaluez la probabilité et l'impact de chaque risque et définissez un plan de prévention.</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* KPI creation Form */}
-                <form onSubmit={handleAddKpi} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3 self-start">
-                  <span className="text-xs font-bold text-slate-700 block">Nouveau KPI</span>
-                  
-                  <div className="space-y-2.5 text-xs">
+                
+                {/* Form */}
+                <form onSubmit={handleAddRisk} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3 self-start">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
+                    <Plus className="w-3.5 h-3.5 text-indigo-600" /> Identifier un Risque
+                  </h4>
+
+                  <div className="space-y-2.5">
                     <div>
-                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Nom du KPI</label>
-                      <input
-                        type="text"
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Description du Risque</label>
+                      <textarea
+                        rows={2}
                         required
-                        placeholder="ex: Disponibilité API"
-                        value={kpiName}
-                        onChange={(e) => setKpiName(e.target.value)}
+                        placeholder="ex: Retard de livraison du fournisseur..."
+                        value={newRiskDesc}
+                        onChange={(e) => setNewRiskDesc(e.target.value)}
                         className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
                       />
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Type de Chiffre / Métrique</label>
-                      <select
-                        value={kpiMetricType}
-                        onChange={(e) => setKpiMetricType(e.target.value as any)}
-                        className="w-full text-xs px-2 py-1.5 bg-white border border-slate-300 rounded"
-                      >
-                        <option value="percent">Pourcentage (%)</option>
-                        <option value="time">Temps / Durée (h/m/s)</option>
-                        <option value="date">Date (J/M/A)</option>
-                        <option value="number">Nombre entier/décimal</option>
-                        <option value="text">Commentaire / Texte</option>
-                      </select>
-                    </div>
+
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Cible visée</label>
-                        <input
-                          type="text"
-                          placeholder="ex: 99.9"
-                          value={kpiTarget}
-                          onChange={(e) => setKpiTarget(e.target.value)}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                        />
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Probabilité (1-5)</label>
+                        <select
+                          value={newRiskProb}
+                          onChange={(e) => setNewRiskProb(Number(e.target.value))}
+                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-bold"
+                        >
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                        </select>
                       </div>
+
                       <div>
-                        <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Valeur Actuelle</label>
-                        <input
-                          type="text"
-                          placeholder="ex: 98.5"
-                          value={kpiCurrent}
-                          onChange={(e) => setKpiCurrent(e.target.value)}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                        />
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Impact (1-5)</label>
+                        <select
+                          value={newRiskImpact}
+                          onChange={(e) => setNewRiskImpact(Number(e.target.value))}
+                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-bold"
+                        >
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
+
                     <div>
-                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Niveau de respect ({kpiScore}%)</label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={kpiScore}
-                        onChange={(e) => setKpiScore(Number(e.target.value))}
-                        className="w-full accent-indigo-600 cursor-pointer"
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Plan de Migation / Action</label>
+                      <textarea
+                        rows={2}
+                        placeholder="Mesures préventives ou correctives..."
+                        value={newRiskMitigation}
+                        onChange={(e) => setNewRiskMitigation(e.target.value)}
+                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
                       />
                     </div>
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded shadow-xs"
+                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded transition-colors shadow-2xs"
                   >
-                    Ajouter le KPI
+                    Consigner le Risque
                   </button>
                 </form>
 
-                {/* KPIs List */}
-                <div className="lg:col-span-2 border border-slate-200 rounded-xl overflow-hidden bg-white">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-semibold text-[10px]">
-                        <th className="py-2.5 px-3">Indicateur KPI</th>
-                        <th className="py-2.5 px-3">Type</th>
-                        <th className="py-2.5 px-3 text-right">Cible</th>
-                        <th className="py-2.5 px-3 text-right">Actuel</th>
-                        <th className="py-2.5 px-3 text-center">Niveau de respect</th>
-                        <th className="py-2.5 px-3 text-center"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-150">
-                      {kpis.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="py-8 text-center text-slate-400 italic font-medium">
-                            Aucun indicateur de performance (KPI) configuré pour ce projet.
-                          </td>
-                        </tr>
-                      ) : (
-                        kpis.map((k) => (
-                          <tr key={k.id} className="hover:bg-slate-50/50">
-                            <td className="py-3 px-3 font-bold text-slate-800">{k.name}</td>
-                            <td className="py-3 px-3 text-slate-500 capitalize">
-                              {k.metricType === 'percent' ? 'Pourcentage (%)' : k.metricType === 'time' ? 'Durée (h/m/s)' : k.metricType === 'date' ? 'Date' : k.metricType === 'number' ? 'Nombre' : 'Texte'}
-                            </td>
-                            <td className="py-3 px-3 text-right font-mono font-medium text-slate-700">{k.targetValue}</td>
-                            <td className="py-3 px-3 text-right font-mono font-bold text-indigo-700">{k.currentValue}</td>
-                            <td className="py-3 px-3">
-                              <div className="space-y-1 max-w-[120px] mx-auto">
-                                <div className="flex justify-between text-[9px] text-slate-500 font-bold">
-                                  <span>Conformité</span>
-                                  <span>{k.status}%</span>
-                                </div>
-                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                  <div 
-                                    className={`h-full rounded-full ${k.status >= 80 ? 'bg-emerald-500' : k.status >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
-                                    style={{ width: `${k.status}%` }}
-                                  />
-                                </div>
-                              </div>
-                            </td>
-                            <td className="py-3 px-3 text-center">
+                {/* Risk list */}
+                <div className="lg:col-span-2 space-y-3">
+                  {risks.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">Aucun risque identifié dans le registre.</p>
+                  ) : (
+                    risks.map((r) => {
+                      const criticalVal = r.prob * r.impact;
+                      return (
+                        <div key={r.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                          <div className="flex justify-between items-start gap-2">
+                            <h5 className="text-xs font-bold text-slate-900">{r.desc}</h5>
+                            <div className="flex items-center gap-1">
+                              <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full font-mono ${
+                                criticalVal >= 15 ? 'bg-rose-100 text-rose-800' : criticalVal >= 8 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                              }`}>
+                                Score: {criticalVal} (P:{r.prob} × I:{r.impact})
+                              </span>
                               <button
-                                onClick={() => handleDeleteKpi(k.id)}
-                                className="text-slate-400 hover:text-rose-600 p-0.5"
+                                onClick={() => setEditingRisk({ ...r })}
+                                className="p-1 text-slate-400 hover:text-indigo-600"
+                                title="Modifier"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleRemoveRisk(r.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                            </div>
+                          </div>
+                          {r.mitigation && (
+                            <p className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded border border-slate-100">
+                              <span className="font-bold text-slate-700">Mitigation:</span> {r.mitigation}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* TAB 6: BUDGET */}
+          {activeTab === 'budget' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Gestion et Groupes de Budget</h3>
+                  <p className="text-xs text-slate-500">Ventilez les dépenses prévues et réelles par poste de coût et modifiez les lignes.</p>
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Forms */}
+                <div className="space-y-4">
+                  {/* Create group */}
+                  <form onSubmit={handleAddBudgetGroup} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">Créer un Poste / Groupe Budget</h4>
+                    <input
+                      type="text"
+                      required
+                      placeholder="ex: Prestations Externe"
+                      value={newBudgetGroupTitle}
+                      onChange={(e) => setNewBudgetGroupTitle(e.target.value)}
+                      className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                    />
+                    <button type="submit" className="w-full py-1.5 bg-slate-800 text-white font-bold text-xs rounded">
+                      Ajouter Poste
+                    </button>
+                  </form>
+
+                  {/* Add expense line */}
+                  <form onSubmit={handleAddExpenseToGroup} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">Ajouter une Ligne de Dépense</h4>
+                    <select
+                      value={expenseGroupId}
+                      onChange={(e) => setExpenseGroupId(e.target.value)}
+                      className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                    >
+                      {budgetGroups.map((g) => (
+                        <option key={g.id} value={g.id}>{g.title}</option>
+                      ))}
+                    </select>
+
+                    <input
+                      type="text"
+                      required
+                      placeholder="Intitulé de la dépense"
+                      value={expenseTitle}
+                      onChange={(e) => setExpenseTitle(e.target.value)}
+                      className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                    />
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        placeholder="Prévu (€)"
+                        value={expensePlanned}
+                        onChange={(e) => setExpensePlanned(e.target.value ? Number(e.target.value) : '')}
+                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Réel (€)"
+                        value={expenseSpent}
+                        onChange={(e) => setExpenseSpent(e.target.value ? Number(e.target.value) : '')}
+                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
+                      />
+                    </div>
+
+                    <button type="submit" className="w-full py-2 bg-indigo-600 text-white font-bold text-xs rounded">
+                      Ajouter Ligne Dépense
+                    </button>
+                  </form>
+                </div>
+
+                {/* Groups list */}
+                <div className="lg:col-span-2 space-y-4">
+                  {budgetGroups.map((group) => (
+                    <div key={group.id} className="bg-slate-50/50 rounded-xl border border-slate-200 p-4 space-y-3">
+                      <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                        <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">{group.title}</h4>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setEditingBudgetGroup(group)}
+                            className="p-1 text-slate-400 hover:text-indigo-600"
+                            title="Modifier"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleRemoveBudgetGroup(group.id)}
+                            className="p-1 text-slate-400 hover:text-rose-600"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        {group.expenses.map((exp) => (
+                          <div key={exp.id} className="bg-white p-2.5 rounded-lg border border-slate-200 flex justify-between items-center text-xs">
+                            <span className="font-bold text-slate-800">{exp.title}</span>
+                            <div className="flex items-center gap-3 font-mono font-bold">
+                              <span className="text-slate-600">Prévu: {formatEuro(exp.planned)}</span>
+                              <span className={exp.spent > exp.planned ? 'text-rose-600' : 'text-emerald-600'}>
+                                Réel: {formatEuro(exp.spent)}
+                              </span>
+                              <button
+                                onClick={() => setEditingExpense({ groupId: group.id, expense: { ...exp } })}
+                                className="p-1 text-slate-400 hover:text-indigo-600"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleRemoveExpenseFromGroup(group.id, exp.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+              </div>
             </div>
           )}
 
-          {/* TAB 8: CLÔTURE (A VENIR) */}
+          {/* TAB 7: COMMUNICATION */}
+          {activeTab === 'communication' && (
+            <div className="space-y-6">
+              {/* Communication Sub-tabs */}
+              <div className="flex border-b border-slate-200 pb-2 gap-4">
+                <button
+                  onClick={() => setCommSubTab('meetings')}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                    commSubTab === 'meetings'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  Événements & Réunions de Gouvernance
+                </button>
+                <button
+                  onClick={() => setCommSubTab('actions')}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                    commSubTab === 'actions'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  Actions de Communication & Rapports
+                </button>
+              </div>
+
+              {commSubTab === 'meetings' ? (
+                <div className="space-y-6">
+                  {/* Add Governance Meeting */}
+                  <form onSubmit={handleAddMeeting} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 max-w-2xl">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Programmer une Réunion / Événement</h4>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Titre de la réunion</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="ex: Comité de Pilotage Mensuel"
+                          value={meetingTitle}
+                          onChange={(e) => setMeetingTitle(e.target.value)}
+                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fréquence / Type</label>
+                        <select
+                          value={meetingType}
+                          onChange={(e) => setMeetingType(e.target.value as any)}
+                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-semibold"
+                        >
+                          <option value="one_time">Événement Ponctuel</option>
+                          <option value="recurring">Réunion Récurrente</option>
+                        </select>
+                      </div>
+
+                      {meetingType === 'recurring' && (
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Périodicité</label>
+                          <select
+                            value={meetingFrequency}
+                            onChange={(e) => setMeetingFrequency(e.target.value)}
+                            className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                          >
+                            <option value="Hebdomadaire">Hebdomadaire</option>
+                            <option value="Bimensuel">Bimensuel</option>
+                            <option value="Mensuel">Mensuel</option>
+                            <option value="2x par semaine">2x par semaine</option>
+                          </select>
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Date</label>
+                        <input
+                          type="date"
+                          value={meetingDate}
+                          onChange={(e) => setMeetingDate(e.target.value)}
+                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Objectifs & Ordre du Jour</label>
+                      <textarea
+                        rows={2}
+                        placeholder="Ordre du jour..."
+                        value={meetingObjectives}
+                        onChange={(e) => setMeetingObjectives(e.target.value)}
+                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                      />
+                    </div>
+
+                    <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-bold text-xs rounded">
+                      Ajouter la réunion
+                    </button>
+                  </form>
+
+                  {/* List */}
+                  <div className="space-y-2">
+                    {governanceMeetings.map((m) => (
+                      <div key={m.id} className="bg-white p-3 rounded-xl border border-slate-200 flex justify-between items-center text-xs">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h5 className="font-bold text-slate-900">{m.title}</h5>
+                            <span className="text-[9px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-full">
+                              {m.type === 'recurring' ? `Récurrente (${m.frequency})` : 'Ponctuelle'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500">{m.objectives}</p>
+                          <span className="text-[10px] text-slate-400 font-mono">Date: {formatDate(m.date)}</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setEditingMeeting(m)}
+                            className="p-1 text-slate-400 hover:text-indigo-600"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteMeeting(m.id)}
+                            className="p-1 text-slate-400 hover:text-rose-600"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Add Action form */}
+                  <form onSubmit={handleAddStaffComm} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 max-w-2xl">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Nouvelle Action de Communication</h4>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Sujet / Action"
+                        value={commTitle}
+                        onChange={(e) => setCommTitle(e.target.value)}
+                        className="text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Audience Cible"
+                        value={commAudience}
+                        onChange={(e) => setCommAudience(e.target.value)}
+                        className="text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Contenu / Message rédigé</label>
+                      <textarea
+                        rows={3}
+                        placeholder="Saisissez le corps du message ou compte-rendu..."
+                        value={commMsgContent}
+                        onChange={(e) => setCommMsgContent(e.target.value)}
+                        className="w-full text-xs p-2.5 border border-slate-300 rounded bg-white"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <input
+                        type="text"
+                        placeholder="Nom du fichier attaché"
+                        value={commAttachmentName}
+                        onChange={(e) => setCommAttachmentName(e.target.value)}
+                        className="text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                      />
+                      <input
+                        type="text"
+                        placeholder="URL de la pièce jointe"
+                        value={commAttachmentUrl}
+                        onChange={(e) => setCommAttachmentUrl(e.target.value)}
+                        className="text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                      />
+                    </div>
+
+                    <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-bold text-xs rounded">
+                      Enregistrer l'action
+                    </button>
+                  </form>
+
+                  {/* Actions list */}
+                  <div className="space-y-3">
+                    {staffComms.map((c) => (
+                      <div key={c.id} className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2 text-xs">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={c.status === 'sent'}
+                              onChange={() => handleToggleCommDone(c.id, c.status)}
+                              className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                            />
+                            <h5 className={`font-bold text-slate-900 ${c.status === 'sent' ? 'line-through text-slate-400' : ''}`}>
+                              {c.title}
+                            </h5>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setEditingStaffComm(c)}
+                              className="p-1 text-slate-400 hover:text-indigo-600"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteStaffComm(c.id)}
+                              className="p-1 text-slate-400 hover:text-rose-600"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {c.messageContent && (
+                          <div className="bg-slate-50 p-2.5 rounded border border-slate-100 text-[11px] text-slate-700 relative">
+                            <p className="whitespace-pre-wrap">{c.messageContent}</p>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(c.messageContent || '');
+                                alert('Message copié dans le presse-papier !');
+                              }}
+                              className="absolute top-2 right-2 text-slate-400 hover:text-indigo-600 p-1 bg-white rounded border border-slate-200"
+                              title="Copier le texte"
+                            >
+                              <Copy className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+
+                        {c.attachmentName && (
+                          <div className="flex items-center gap-1.5 text-[10px] text-indigo-700 font-bold">
+                            <Paperclip className="w-3 h-3" />
+                            <span>Pièce jointe: {c.attachmentName}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 8: KPI */}
+          {activeTab === 'kpis' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Indicateurs de Performance (KPI)</h3>
+                  <p className="text-xs text-slate-500">Configurez les métriques stratégiques et leurs valeurs cibles.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <form onSubmit={handleAddKpi} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 self-start">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">Ajouter un KPI</h4>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Nom du KPI"
+                    value={kpiName}
+                    onChange={(e) => setKpiName(e.target.value)}
+                    className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="Valeur actuelle"
+                      value={kpiCurrent}
+                      onChange={(e) => setKpiCurrent(e.target.value)}
+                      className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Valeur cible"
+                      value={kpiTarget}
+                      onChange={(e) => setKpiTarget(e.target.value)}
+                      className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                    />
+                  </div>
+                  <button type="submit" className="w-full py-2 bg-indigo-600 text-white font-bold text-xs rounded">
+                    Consigner le KPI
+                  </button>
+                </form>
+
+                <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {kpiList.map((k) => (
+                    <div key={k.id} className="bg-white p-4 rounded-xl border border-slate-200 space-y-2 shadow-xs">
+                      <div className="flex justify-between items-start">
+                        <h5 className="text-xs font-bold text-slate-900">{k.name}</h5>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => setEditingKpi(k)} className="p-1 text-slate-400 hover:text-indigo-600">
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => handleDeleteKpi(k.id)} className="p-1 text-slate-400 hover:text-rose-600">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-baseline font-mono">
+                        <span className="text-xl font-bold text-indigo-700">{k.currentValue}</span>
+                        <span className="text-xs text-slate-400">Cible: {k.targetValue}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 9: CLÔTURE */}
           {activeTab === 'close' && (
-            <div className="py-12 flex flex-col items-center text-center space-y-4 max-w-md mx-auto">
-              <div className="p-4 bg-slate-50 border border-slate-200 text-slate-400 rounded-full">
-                <Lock className="w-8 h-8" />
-              </div>
-              <div className="space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full">
-                  Module à Venir
-                </span>
-                <h3 className="text-sm font-bold text-slate-800">Outils de Clôture de Projet</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Ce volet permettra de formaliser la fin du projet : génération de Procès-verbal (PV) de recette finale avec réserves, et signature formelle électronique d'acceptation client.
-                </p>
-              </div>
-            </div>
+            <ClosureTab project={project} onUpdateProject={updateProjectData} />
           )}
 
-          {/* TAB 9: REX (A VENIR) */}
+          {/* TAB 10: REX */}
           {activeTab === 'rex' && (
-            <div className="py-12 flex flex-col items-center text-center space-y-4 max-w-md mx-auto">
-              <div className="p-4 bg-slate-50 border border-slate-200 text-slate-400 rounded-full">
-                <Radio className="w-8 h-8" />
-              </div>
-              <div className="space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full">
-                  Module à Venir
-                </span>
-                <h3 className="text-sm font-bold text-slate-800">Retour d'Expérience (REX)</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Consignez et capitalisez les leçons apprises (ce qui a bien fonctionné, les avertissements et axes d'amélioration) pour enrichir la maturité méthodologique de votre organisation.
-                </p>
-              </div>
-            </div>
+            <RexTab project={project} onUpdateProject={updateProjectData} />
           )}
 
-          {/* TAB 10: ESPACE DOCUMENTS (A VENIR) */}
+          {/* TAB 11: ESPACE DOCUMENTS */}
           {activeTab === 'docs' && (
-            <div className="py-12 flex flex-col items-center text-center space-y-4 max-w-md mx-auto">
-              <div className="p-4 bg-slate-50 border border-slate-200 text-slate-400 rounded-full">
-                <Sparkles className="w-8 h-8" />
-              </div>
-              <div className="space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full">
-                  Module à Venir
-                </span>
-                <h3 className="text-sm font-bold text-slate-800">Espace de Documents du Projet</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Centralisez, uploadez et partagez tous les livrables contractuels (Cadrage, CdC, Spécifications, Validation de Recette) de manière sécurisée et organisée.
-                </p>
-              </div>
-            </div>
+            <DocumentsTab project={project} onUpdateProject={updateProjectData} />
           )}
 
         </div>
       </div>
+
+      {/* EDITING MODALS */}
+
+      {/* Edit Group Modal */}
+      {editingGroup && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleUpdateGroup} className="bg-white rounded-xl max-w-sm w-full p-5 space-y-4 shadow-xl">
+            <h4 className="text-sm font-bold text-slate-900">Modifier le Groupe</h4>
+            <input
+              type="text"
+              required
+              value={editingGroup.name}
+              onChange={(e) => setEditingGroup({ ...editingGroup, name: e.target.value })}
+              className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white"
+            />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setEditingGroup(null)} className="px-3 py-1.5 text-xs font-bold text-slate-600">
+                Annuler
+              </button>
+              <button type="submit" className="px-4 py-1.5 bg-indigo-600 text-white font-bold text-xs rounded">
+                Mettre à jour
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Edit Stakeholder Modal */}
+      {editingStakeholder && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleUpdateStakeholder} className="bg-white rounded-xl max-w-sm w-full p-5 space-y-4 shadow-xl">
+            <h4 className="text-sm font-bold text-slate-900">Modifier la Partie Prenante</h4>
+            <input
+              type="text"
+              required
+              value={editingStakeholder.stakeholder.name}
+              onChange={(e) => setEditingStakeholder({
+                ...editingStakeholder,
+                stakeholder: { ...editingStakeholder.stakeholder, name: e.target.value }
+              })}
+              className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white"
+            />
+            <input
+              type="text"
+              value={editingStakeholder.stakeholder.role}
+              onChange={(e) => setEditingStakeholder({
+                ...editingStakeholder,
+                stakeholder: { ...editingStakeholder.stakeholder, role: e.target.value }
+              })}
+              className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white"
+            />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setEditingStakeholder(null)} className="px-3 py-1.5 text-xs font-bold text-slate-600">
+                Annuler
+              </button>
+              <button type="submit" className="px-4 py-1.5 bg-indigo-600 text-white font-bold text-xs rounded">
+                Enregistrer
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Edit Gantt Item Modal */}
+      {editingGanttItem && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleSaveGanttItemEdit} className="bg-white rounded-xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <h4 className="text-sm font-bold text-slate-900">Modifier Tâche / Jalon</h4>
+
+            <div className="space-y-3">
+              <input
+                type="text"
+                required
+                value={editingGanttItem.item.name}
+                onChange={(e) => setEditingGanttItem({
+                  ...editingGanttItem,
+                  item: { ...editingGanttItem.item, name: e.target.value }
+                })}
+                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white"
+              />
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Date Début</label>
+                  <input
+                    type="date"
+                    value={editingGanttItem.item.startDate}
+                    onChange={(e) => setEditingGanttItem({
+                      ...editingGanttItem,
+                      item: { ...editingGanttItem.item, startDate: e.target.value }
+                    })}
+                    className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Date Fin</label>
+                  <input
+                    type="date"
+                    value={editingGanttItem.item.endDate}
+                    onChange={(e) => setEditingGanttItem({
+                      ...editingGanttItem,
+                      item: { ...editingGanttItem.item, endDate: e.target.value }
+                    })}
+                    className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                  />
+                </div>
+              </div>
+
+              {editingGanttItem.item.type === 'task' && (
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Progression ({editingGanttItem.item.progress}%)</label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={editingGanttItem.item.progress}
+                    onChange={(e) => setEditingGanttItem({
+                      ...editingGanttItem,
+                      item: { ...editingGanttItem.item, progress: Number(e.target.value) }
+                    })}
+                    className="w-full accent-indigo-600"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setEditingGanttItem(null)} className="px-3 py-1.5 text-xs font-bold text-slate-600">
+                Annuler
+              </button>
+              <button type="submit" className="px-4 py-1.5 bg-indigo-600 text-white font-bold text-xs rounded">
+                Mettre à jour
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Edit Risk Modal */}
+      {editingRisk && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleUpdateRisk} className="bg-white rounded-xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <h4 className="text-sm font-bold text-slate-900">Modifier le Risque</h4>
+            <textarea
+              rows={2}
+              required
+              value={editingRisk.desc}
+              onChange={(e) => setEditingRisk({ ...editingRisk, desc: e.target.value })}
+              className="w-full text-xs p-2.5 border border-slate-300 rounded bg-white"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <select
+                value={editingRisk.prob}
+                onChange={(e) => setEditingRisk({ ...editingRisk, prob: Number(e.target.value) })}
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-bold"
+              >
+                {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>Probabilité: {n}</option>)}
+              </select>
+              <select
+                value={editingRisk.impact}
+                onChange={(e) => setEditingRisk({ ...editingRisk, impact: Number(e.target.value) })}
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-bold"
+              >
+                {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>Impact: {n}</option>)}
+              </select>
+            </div>
+            <textarea
+              rows={2}
+              value={editingRisk.mitigation}
+              onChange={(e) => setEditingRisk({ ...editingRisk, mitigation: e.target.value })}
+              className="w-full text-xs p-2.5 border border-slate-300 rounded bg-white"
+              placeholder="Plan de mitigation..."
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setEditingRisk(null)} className="px-3 py-1.5 text-xs font-bold text-slate-600">
+                Annuler
+              </button>
+              <button type="submit" className="px-4 py-1.5 bg-indigo-600 text-white font-bold text-xs rounded">
+                Mettre à jour
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Edit Budget Expense Modal */}
+      {editingExpense && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleUpdateExpense} className="bg-white rounded-xl max-w-sm w-full p-6 space-y-4 shadow-xl">
+            <h4 className="text-sm font-bold text-slate-900">Modifier la Ligne Budgétaire</h4>
+            <input
+              type="text"
+              required
+              value={editingExpense.expense.title}
+              onChange={(e) => setEditingExpense({
+                ...editingExpense,
+                expense: { ...editingExpense.expense, title: e.target.value }
+              })}
+              className="w-full text-xs px-3 py-2 border border-slate-300 rounded bg-white"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="number"
+                value={editingExpense.expense.planned}
+                onChange={(e) => setEditingExpense({
+                  ...editingExpense,
+                  expense: { ...editingExpense.expense, planned: Number(e.target.value) }
+                })}
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
+              />
+              <input
+                type="number"
+                value={editingExpense.expense.spent}
+                onChange={(e) => setEditingExpense({
+                  ...editingExpense,
+                  expense: { ...editingExpense.expense, spent: Number(e.target.value) }
+                })}
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setEditingExpense(null)} className="px-3 py-1.5 text-xs font-bold text-slate-600">
+                Annuler
+              </button>
+              <button type="submit" className="px-4 py-1.5 bg-indigo-600 text-white font-bold text-xs rounded">
+                Mettre à jour
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
     </div>
   );
