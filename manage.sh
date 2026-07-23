@@ -284,6 +284,40 @@ show_logs() {
     fi
 }
 
+# 9. Modifier le mot de passe Administrateur
+change_admin_password() {
+    echo -e "\n${CYAN}====================================================${NC}"
+    echo -e "${CYAN}    MODIFICATION DU MOT DE PASSE ADMINISTRATEUR     ${NC}"
+    echo -e "${CYAN}====================================================${NC}"
+
+    read -s -p "Saisissez le nouveau mot de passe administrateur : " NEW_PASS
+    echo ""
+    read -s -p "Confirmez le nouveau mot de passe : " CONFIRM_PASS
+    echo ""
+
+    if [ -z "$NEW_PASS" ]; then
+        echo -e "${RED}Erreur : Le mot de passe ne peut pas être vide.${NC}"
+        return
+    fi
+
+    if [ "$NEW_PASS" != "$CONFIRM_PASS" ]; then
+        echo -e "${RED}Erreur : Les deux mots de passe ne correspondent pas.${NC}"
+        return
+    fi
+
+    echo -e "\n${YELLOW}Hachage PBKDF2 SHA-512 et mise à jour de la configuration...${NC}"
+    node scripts/change-admin-password.js "$NEW_PASS"
+
+    echo -e "${YELLOW}Recompilation du projet en cours...${NC}"
+    npm run build
+
+    read -p "Voulez-vous redémarrer le serveur maintenant pour appliquer les changements ? (O/n) : " RESTART_NOW
+    RESTART_NOW=${RESTART_NOW:-O}
+    if [[ "$RESTART_NOW" =~ ^[OoYy]$ ]]; then
+        restart_application
+    fi
+}
+
 # Boucle du Menu Principal
 while true; do
     echo -e "\n${CYAN}==============================================================${NC}"
@@ -297,9 +331,10 @@ while true; do
     echo " 6) Désinstaller / Purger la BDD (Suppression complète)"
     echo " 7) Redémarrer le serveur / service"
     echo " 8) Voir les logs du serveur en direct"
+    echo " 9) Modifier le mot de passe Administrateur (Haché)"
     echo " 0) Quitter"
     echo ""
-    read -p "Sélectionnez une option [0-8] : " choice
+    read -p "Sélectionnez une option [0-9] : " choice
 
     case $choice in
         1) check_file_integrity ;;
@@ -310,6 +345,7 @@ while true; do
         6) uninstall_database ;;
         7) restart_application ;;
         8) show_logs ;;
+        9) change_admin_password ;;
         0) echo -e "${GREEN}Au revoir !${NC}"; exit 0 ;;
         *) echo -e "${RED}Choix invalide, veuillez rechoisir.${NC}" ;;
     esac

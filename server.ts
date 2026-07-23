@@ -4,6 +4,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import type { Database as SqlDatabase } from 'sql.js';
 import { ADMIN_CONFIG } from './src/config/adminConfig';
+import { hashPassword, verifyPassword } from './src/utils/crypto';
 
 // Safe determination of current directory & project root
 function getDir(): { currentDir: string; projectRoot: string } {
@@ -350,14 +351,30 @@ function getAllUsers(): any[] {
   }
 }
 
+function processUsersPasswords(usersList: any[]): any[] {
+  return usersList.map((u) => {
+    if (u.password && !u.passwordHash) {
+      const { hash, salt } = hashPassword(u.password);
+      return {
+        ...u,
+        passwordHash: hash,
+        salt,
+        password: ''
+      };
+    }
+    return u;
+  });
+}
+
 function saveUsersToDb(users: any[]): boolean {
+  const processedUsers = processUsersPasswords(users);
   if (!db) {
     try {
       let current = { projects: [], globalTeam: [], userGroups: [], users: [] };
       if (fs.existsSync(JSON_FILE)) {
         current = JSON.parse(fs.readFileSync(JSON_FILE, 'utf-8'));
       }
-      current.users = users as any;
+      current.users = processedUsers as any;
       fs.writeFileSync(JSON_FILE, JSON.stringify(current, null, 2), 'utf-8');
       return true;
     } catch (err) {
@@ -369,7 +386,7 @@ function saveUsersToDb(users: any[]): boolean {
   try {
     db.run('DELETE FROM users');
     const now = new Date().toISOString();
-    for (const u of users) {
+    for (const u of processedUsers) {
       db.run('INSERT INTO users (id, data, updated_at) VALUES (?, ?, ?)', [
         u.id || `usr-${Date.now()}`,
         JSON.stringify(u),
@@ -494,31 +511,31 @@ app.post('/api/auth/login', (req, res) => {
   const trimmedPassword = String(password).trim();
 
   // 1. Check Root Admin credentials from ADMIN_CONFIG
-  if (
-    trimmedUsername.toLowerCase() === ADMIN_CONFIG.username.toLowerCase() &&
-    trimmedPassword === ADMIN_CONFIG.password
-  ) {
-    const adminUser = {
-      id: ADMIN_CONFIG.id,
-      username: ADMIN_CONFIG.username,
-      firstName: ADMIN_CONFIG.firstName,
-      lastName: ADMIN_CONFIG.lastName,
-      email: ADMIN_CONFIG.email,
-      role: ADMIN_CONFIG.role,
-      groupIds: [],
-      isAdmin: true
-    };
-    return res.json({ success: true, user: adminUser });
+  if (trimmedUsername.toLowerCase() === ADMIN_CONFIG.username.toLowerCase()) {
+    if (verifyPassword(trimmedPassword, ADMIN_CONFIG)) {
+      const adminUser = {
+        id: ADMIN_CONFIG.id,
+        username: ADMIN_CONFIG.username,
+        firstName: ADMIN_CONFIG.firstName,
+        lastName: ADMIN_CONFIG.lastName,
+        email: ADMIN_CONFIG.email,
+        role: ADMIN_CONFIG.role,
+        groupIds: [],
+        isAdmin: true
+      };
+      return res.json({ success: true, user: adminUser });
+    }
   }
 
   // 2. Check stored users
   const users = getAllUsers();
-  const user = users.find(
-    (u) => u.username?.toLowerCase() === trimmedUsername.toLowerCase() && u.password === trimmedPassword
-  );
+  const user = users.find((u) => {
+    if (u.username?.toLowerCase() !== trimmedUsername.toLowerCase()) return false;
+    return verifyPassword(trimmedPassword, u as any);
+  });
 
   if (user) {
-    const { password: _, ...userWithoutPassword } = user;
+    const { password: _, passwordHash: __, salt: ___, ...userWithoutPassword } = user;
     return res.json({ success: true, user: userWithoutPassword });
   }
 
@@ -531,12 +548,17 @@ app.post('/api/auth/change-password', (req, res) => {
     return res.status(400).json({ error: 'Identifiant et nouveau mot de passe requis' });
   }
 
+  const cleanNew = String(newPassword).trim();
+  const { hash, salt } = hashPassword(cleanNew);
+
   // Root Admin password update
   if (userId === ADMIN_CONFIG.id) {
-    if (oldPassword && oldPassword.trim() !== ADMIN_CONFIG.password) {
+    if (oldPassword && !verifyPassword(String(oldPassword).trim(), ADMIN_CONFIG)) {
       return res.status(400).json({ error: 'Ancien mot de passe administrateur incorrect' });
     }
-    ADMIN_CONFIG.password = String(newPassword).trim();
+    ADMIN_CONFIG.passwordHash = hash;
+    ADMIN_CONFIG.salt = salt;
+    ADMIN_CONFIG.password = '';
     return res.json({ success: true, message: 'Mot de passe administrateur mis à jour' });
   }
 
@@ -547,11 +569,13 @@ app.post('/api/auth/change-password', (req, res) => {
     return res.status(404).json({ error: 'Utilisateur non trouvé' });
   }
 
-  if (oldPassword && users[userIndex].password && users[userIndex].password !== String(oldPassword).trim()) {
+  if (oldPassword && !verifyPassword(String(oldPassword).trim(), users[userIndex] as any)) {
     return res.status(400).json({ error: 'Ancien mot de passe incorrect' });
   }
 
-  users[userIndex].password = String(newPassword).trim();
+  users[userIndex].passwordHash = hash;
+  users[userIndex].salt = salt;
+  users[userIndex].password = '';
   saveUsersToDb(users);
 
   return res.json({ success: true, message: 'Mot de passe mis à jour avec succès' });
