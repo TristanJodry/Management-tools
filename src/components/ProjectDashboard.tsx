@@ -2384,16 +2384,97 @@ export default function ProjectDashboard({
             <h4 className="text-sm font-bold text-slate-900">Modifier Tâche / Jalon</h4>
 
             <div className="space-y-3">
-              <input
-                type="text"
-                required
-                value={editingGanttItem.item.name}
-                onChange={(e) => setEditingGanttItem({
-                  ...editingGanttItem,
-                  item: { ...editingGanttItem.item, name: e.target.value }
-                })}
-                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white"
-              />
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Intitulé :</label>
+                <input
+                  type="text"
+                  required
+                  value={editingGanttItem.item.name}
+                  onChange={(e) => setEditingGanttItem({
+                    ...editingGanttItem,
+                    item: { ...editingGanttItem.item, name: e.target.value }
+                  })}
+                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white"
+                />
+              </div>
+
+              {/* Assigned Members Selection */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Personnes assignées :</label>
+                <div className="p-2 border border-slate-300 rounded-lg bg-white text-xs max-h-28 overflow-y-auto space-y-1">
+                  {globalTeam.length === 0 ? (
+                    <p className="text-[11px] text-slate-400 italic">Aucun membre dans l'équipe.</p>
+                  ) : (
+                    globalTeam.map((m) => {
+                      const assignedList = Array.isArray(editingGanttItem.item.assignedTo)
+                        ? editingGanttItem.item.assignedTo
+                        : typeof editingGanttItem.item.assignedTo === 'string' && editingGanttItem.item.assignedTo
+                        ? [editingGanttItem.item.assignedTo]
+                        : [];
+                      const checked = assignedList.includes(m.id);
+                      return (
+                        <label key={m.id} className="flex items-center gap-2 font-medium text-slate-700 cursor-pointer hover:bg-slate-50 p-1 rounded">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              let updatedList: string[];
+                              if (e.target.checked) {
+                                updatedList = [...assignedList, m.id];
+                              } else {
+                                updatedList = assignedList.filter(id => id !== m.id);
+                              }
+                              setEditingGanttItem({
+                                ...editingGanttItem,
+                                item: { ...editingGanttItem.item, assignedTo: updatedList }
+                              });
+                            }}
+                            className="rounded text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span>{m.firstName} {m.lastName}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Predecessor Selection */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Prédécesseur (Lien de dépendance) :</label>
+                <select
+                  value={editingGanttItem.item.predecessorId || ''}
+                  onChange={(e) => {
+                    const predId = e.target.value;
+                    let newStart = editingGanttItem.item.startDate;
+                    if (predId) {
+                      const pred = allGanttItems.find(gi => gi.id === predId);
+                      if (pred && pred.endDate) {
+                        const predEnd = new Date(pred.endDate);
+                        predEnd.setDate(predEnd.getDate() + 1);
+                        newStart = predEnd.toISOString().split('T')[0];
+                      }
+                    }
+                    setEditingGanttItem({
+                      ...editingGanttItem,
+                      item: {
+                        ...editingGanttItem.item,
+                        predecessorId: predId || undefined,
+                        startDate: newStart,
+                        endDate: editingGanttItem.item.type === 'milestone' ? newStart : editingGanttItem.item.endDate
+                      }
+                    });
+                  }}
+                  className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white"
+                >
+                  <option value="">Aucun prédécesseur</option>
+                  {allGanttItems
+                    .filter(gi => gi.id !== editingGanttItem.item.id)
+                    .map(gi => (
+                      <option key={gi.id} value={gi.id}>{gi.name}</option>
+                    ))}
+                </select>
+              </div>
 
               {editingGanttItem.item.type === 'milestone' ? (
                 <div>
