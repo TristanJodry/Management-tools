@@ -60,6 +60,8 @@ import WorkloadTab from './WorkloadTab';
 import ClosureTab from './ClosureTab';
 import RexTab from './RexTab';
 import DocumentsTab from './DocumentsTab';
+import { GanttChartVisualizer } from './GanttChartVisualizer';
+import { RiskMatrixVisualizer } from './RiskMatrixVisualizer';
 
 interface ProjectDashboardProps {
   project: Project;
@@ -1294,6 +1296,14 @@ export default function ProjectDashboard({
                 <WorkloadTab project={project} globalTeam={globalTeam} onUpdateProject={updateProjectData} />
               ) : (
                 <div className="space-y-6">
+                  {/* Interactive Gantt Visualizer */}
+                  <GanttChartVisualizer
+                    phases={ganttPhases}
+                    teamMembers={globalTeam}
+                    onUpdateProgress={(phaseId, itemId, progress) => handleUpdateTaskProgress(phaseId, itemId, progress)}
+                    onToggleMilestone={(phaseId, itemId, completed) => handleToggleMilestone(phaseId, itemId, completed)}
+                  />
+
                   {/* Create Phase form */}
                   <form onSubmit={handleAddPhase} className="flex gap-2 max-w-md">
                     <input
@@ -1606,9 +1616,16 @@ export default function ProjectDashboard({
           {/* TAB 5: RISQUES */}
           {activeTab === 'risks' && (
             <div className="space-y-6">
+              {/* 5x5 Interactive Risk Matrix Visualizer */}
+              <RiskMatrixVisualizer
+                risks={risks}
+                onEditRisk={(r) => setEditingRisk({ ...r })}
+                onRemoveRisk={(id) => handleRemoveRisk(id)}
+              />
+
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 pb-3">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800">Registre des Risques du Projet</h3>
+                  <h3 className="text-sm font-bold text-slate-800">Ajouter / Modifier un Risque dans le Registre</h3>
                   <p className="text-xs text-slate-500">Évaluez la probabilité et l'impact de chaque risque et définissez un plan de prévention.</p>
                 </div>
               </div>
