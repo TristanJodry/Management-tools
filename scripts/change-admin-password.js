@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,6 +42,12 @@ export const ADMIN_CONFIG = {
 `;
 
 fs.writeFileSync(configPath, fileContent, 'utf-8');
+
+try {
+  execSync('git update-index --skip-worktree src/config/adminConfig.ts 2>/dev/null', { stdio: 'ignore' });
+} catch (e) {
+  // Ignore if git is not initialized or file not committed yet
+}
 
 console.log('\n======================================================');
 console.log('✅ Mot de passe Administrateur mis à jour et haché !');
