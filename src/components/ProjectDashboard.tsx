@@ -328,17 +328,21 @@ export default function ProjectDashboard({
 
   const handleAddItemToPhase = (phaseId: string) => {
     if (!itemName.trim()) return;
+    const isMilestone = itemType === 'milestone';
+    const startDateVal = itemStart || project.startDate || new Date().toISOString().split('T')[0];
+    const endDateVal = isMilestone ? startDateVal : (itemEnd || startDateVal);
+
     const newItem: GanttItem = {
       id: `item-${Date.now()}`,
       type: itemType,
       name: itemName.trim(),
       assignedTo: itemAssignedArray.length > 0 ? itemAssignedArray : undefined,
-      startDate: itemStart || project.startDate || new Date().toISOString().split('T')[0],
-      endDate: itemEnd || itemStart || project.endDate || new Date().toISOString().split('T')[0],
+      startDate: startDateVal,
+      endDate: endDateVal,
       progress: 0,
       completed: false,
       predecessorId: itemPredecessorId || undefined,
-      estimatedDays: itemEstDays || 1
+      estimatedDays: isMilestone ? 0 : (itemEstDays || 1)
     };
 
     const updated = ganttPhases.map((p) => {
@@ -545,6 +549,7 @@ export default function ProjectDashboard({
   // ==========================================
   const [newBudgetGroupTitle, setNewBudgetGroupTitle] = useState('');
   const [expenseTitle, setExpenseTitle] = useState('');
+  const [expenseQuantity, setExpenseQuantity] = useState<number | ''>(1);
   const [expensePlanned, setExpensePlanned] = useState<number | ''>('');
   const [expenseSpent, setExpenseSpent] = useState<number | ''>('');
   const [expenseGroupId, setExpenseGroupId] = useState('');
@@ -591,6 +596,7 @@ export default function ProjectDashboard({
       id: `exp-${Date.now()}`,
       name: expenseTitle.trim(),
       title: expenseTitle.trim(),
+      quantity: Number(expenseQuantity) || 1,
       planned: Number(expensePlanned) || 0,
       spent: Number(expenseSpent) || 0
     };
@@ -606,6 +612,7 @@ export default function ProjectDashboard({
     updateProjectData({ budgetGroups: updated });
 
     setExpenseTitle('');
+    setExpenseQuantity(1);
     setExpensePlanned('');
     setExpenseSpent('');
   };
@@ -1392,7 +1399,7 @@ export default function ProjectDashboard({
                               </div>
 
                               <div>
-                                <span className="text-[9px] font-bold text-slate-400 block">Prédecesseur:</span>
+                                <span className="text-[9px] font-bold text-slate-400 block">Prédécesseur:</span>
                                 <select
                                   value={itemPredecessorId}
                                   onChange={(e) => {
@@ -1408,25 +1415,43 @@ export default function ProjectDashboard({
                                 </select>
                               </div>
 
-                              <div>
-                                <span className="text-[9px] font-bold text-slate-400 block">Début:</span>
-                                <input
-                                  type="date"
-                                  value={itemStart}
-                                  onChange={(e) => setItemStart(e.target.value)}
-                                  className="w-full px-2 py-1 border border-slate-300 rounded bg-white text-[10px]"
-                                />
-                              </div>
+                              {itemType === 'milestone' ? (
+                                <div className="sm:col-span-2">
+                                  <span className="text-[9px] font-bold text-amber-700 block uppercase">Date du jalon (échéance) :</span>
+                                  <input
+                                    type="date"
+                                    required
+                                    value={itemStart}
+                                    onChange={(e) => {
+                                      setItemStart(e.target.value);
+                                      setItemEnd(e.target.value);
+                                    }}
+                                    className="w-full px-2 py-1 border border-amber-300 rounded bg-amber-50/50 text-xs font-bold"
+                                  />
+                                </div>
+                              ) : (
+                                <>
+                                  <div>
+                                    <span className="text-[9px] font-bold text-slate-400 block">Début:</span>
+                                    <input
+                                      type="date"
+                                      value={itemStart}
+                                      onChange={(e) => setItemStart(e.target.value)}
+                                      className="w-full px-2 py-1 border border-slate-300 rounded bg-white text-[10px]"
+                                    />
+                                  </div>
 
-                              <div>
-                                <span className="text-[9px] font-bold text-slate-400 block">Fin (Optionnel):</span>
-                                <input
-                                  type="date"
-                                  value={itemEnd}
-                                  onChange={(e) => setItemEnd(e.target.value)}
-                                  className="w-full px-2 py-1 border border-slate-300 rounded bg-white text-[10px]"
-                                />
-                              </div>
+                                  <div>
+                                    <span className="text-[9px] font-bold text-slate-400 block">Fin:</span>
+                                    <input
+                                      type="date"
+                                      value={itemEnd}
+                                      onChange={(e) => setItemEnd(e.target.value)}
+                                      className="w-full px-2 py-1 border border-slate-300 rounded bg-white text-[10px]"
+                                    />
+                                  </div>
+                                </>
+                              )}
                             </div>
 
                             <div className="flex justify-end gap-2 pt-1">
@@ -1449,71 +1474,100 @@ export default function ProjectDashboard({
                         )}
 
                         {/* Phase Items List */}
-                        <div className="space-y-1.5">
+                        <div className="space-y-2">
                           {phase.items.length === 0 ? (
                             <p className="text-xs text-slate-400 italic">Aucune tâche ou jalon dans cette phase.</p>
                           ) : (
-                            phase.items.map((item) => (
-                              <div key={item.id} className="bg-white p-2.5 rounded-lg border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-                                <div className="flex items-center gap-2">
-                                  {item.type === 'milestone' ? (
-                                    <input
-                                      type="checkbox"
-                                      checked={item.completed}
-                                      onChange={(e) => handleToggleMilestone(phase.id, item.id, e.target.checked)}
-                                      className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4"
-                                    />
-                                  ) : (
-                                    <span className="font-mono text-indigo-600 font-bold w-12 text-[10px] text-right shrink-0">
-                                      {item.progress}%
-                                    </span>
-                                  )}
+                            phase.items.map((item) => {
+                              const isMilestone = item.type === 'milestone';
+                              const predItem = item.predecessorId ? allGanttItems.find(gi => gi.id === item.predecessorId) : null;
+                              const assignedList = Array.isArray(item.assignedTo) ? item.assignedTo : typeof item.assignedTo === 'string' && item.assignedTo ? [item.assignedTo] : [];
+                              const assignedNames = assignedList
+                                .map(id => globalTeam.find(m => m.id === id)?.firstName)
+                                .filter(Boolean)
+                                .join(', ');
 
-                                  <div>
-                                    <span className="font-bold text-slate-800">
-                                      {item.type === 'milestone' ? '◆ ' : '■ '}{item.name}
-                                    </span>
-                                    <div className="text-[10px] text-slate-500 flex items-center gap-2">
-                                      <span>Du {formatDate(item.startDate)} au {formatDate(item.endDate)}</span>
-                                      {item.predecessorId && (
-                                        <span className="bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded font-bold">
-                                          Prédécesseur défini
-                                        </span>
-                                      )}
+                              return (
+                                <div key={item.id} className="bg-white p-3 rounded-lg border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs shadow-2xs">
+                                  <div className="flex items-center gap-2.5">
+                                    {isMilestone ? (
+                                      <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold px-2 py-0.5 rounded uppercase shrink-0">
+                                        JALON / LIVRABLE
+                                      </span>
+                                    ) : (
+                                      <span className="bg-indigo-100 text-indigo-900 border border-indigo-200 text-[10px] font-bold px-2 py-0.5 rounded uppercase shrink-0">
+                                        TÂCHE
+                                      </span>
+                                    )}
+
+                                    <div>
+                                      <span className="font-bold text-slate-900 text-xs">{item.name}</span>
+                                      <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-2 mt-0.5">
+                                        {predItem && (
+                                          <span className="bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded text-[10px] font-semibold border border-slate-200">
+                                            🔗 Prédécesseur: {predItem.name}
+                                          </span>
+                                        )}
+                                        {assignedNames && (
+                                          <span className="text-slate-600 font-medium">👤 {assignedNames}</span>
+                                        )}
+                                        {isMilestone ? (
+                                          <span className="font-medium text-amber-800">🗓️ Échéance : {formatDate(item.startDate)}</span>
+                                        ) : (
+                                          <span className="font-medium text-slate-600">🗓️ {formatDate(item.startDate)} ➔ {formatDate(item.endDate)}</span>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
 
-                                <div className="flex items-center gap-3">
-                                  {item.type === 'task' && (
-                                    <input
-                                      type="range"
-                                      min={0}
-                                      max={100}
-                                      step={5}
-                                      value={item.progress}
-                                      onChange={(e) => handleUpdateTaskProgress(phase.id, item.id, Number(e.target.value))}
-                                      className="w-24 accent-indigo-600"
-                                    />
-                                  )}
+                                  <div className="flex items-center gap-3 shrink-0">
+                                    {isMilestone ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleToggleMilestone(phase.id, item.id, !item.completed)}
+                                        className={`px-2.5 py-1 text-xs font-bold rounded transition-colors ${
+                                          item.completed
+                                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                            : 'bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200'
+                                        }`}
+                                      >
+                                        {item.completed ? '✓ Validé' : 'À valider'}
+                                      </button>
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="range"
+                                          min={0}
+                                          max={100}
+                                          step={5}
+                                          value={item.progress || 0}
+                                          onChange={(e) => handleUpdateTaskProgress(phase.id, item.id, Number(e.target.value))}
+                                          className="w-24 accent-indigo-600 cursor-pointer"
+                                        />
+                                        <span className="font-mono text-xs font-bold text-indigo-700 w-8 text-right">
+                                          {item.progress || 0}%
+                                        </span>
+                                      </div>
+                                    )}
 
-                                  <button
-                                    onClick={() => setEditingGanttItem({ phaseId: phase.id, item: { ...item } })}
-                                    className="p-1 text-slate-400 hover:text-indigo-600"
-                                    title="Modifier la tâche"
-                                  >
-                                    <Edit3 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleRemoveGanttItem(phase.id, item.id)}
-                                    className="p-1 text-slate-400 hover:text-rose-600"
-                                    title="Supprimer"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                    <button
+                                      onClick={() => setEditingGanttItem({ phaseId: phase.id, item: { ...item } })}
+                                      className="p-1 text-slate-400 hover:text-indigo-600"
+                                      title="Modifier"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleRemoveGanttItem(phase.id, item.id)}
+                                      className="p-1 text-slate-400 hover:text-rose-600"
+                                      title="Supprimer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </div>
-                              </div>
-                            ))
+                              );
+                            })
                           )}
                         </div>
 
@@ -1817,21 +1871,38 @@ export default function ProjectDashboard({
                       className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
                     />
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="number"
-                        placeholder="Prévu (€)"
-                        value={expensePlanned}
-                        onChange={(e) => setExpensePlanned(e.target.value ? Number(e.target.value) : '')}
-                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
-                      />
-                      <input
-                        type="number"
-                        placeholder="Réel (€)"
-                        value={expenseSpent}
-                        onChange={(e) => setExpenseSpent(e.target.value ? Number(e.target.value) : '')}
-                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
-                      />
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Qté</label>
+                        <input
+                          type="number"
+                          min={1}
+                          placeholder="Qté"
+                          value={expenseQuantity}
+                          onChange={(e) => setExpenseQuantity(e.target.value ? Number(e.target.value) : '')}
+                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Prévu (€)</label>
+                        <input
+                          type="number"
+                          placeholder="Prévu (€)"
+                          value={expensePlanned}
+                          onChange={(e) => setExpensePlanned(e.target.value ? Number(e.target.value) : '')}
+                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Réel (€)</label>
+                        <input
+                          type="number"
+                          placeholder="Réel (€)"
+                          value={expenseSpent}
+                          onChange={(e) => setExpenseSpent(e.target.value ? Number(e.target.value) : '')}
+                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
+                        />
+                      </div>
                     </div>
 
                     <button type="submit" className="w-full py-2 bg-indigo-600 text-white font-bold text-xs rounded">
@@ -1866,7 +1937,14 @@ export default function ProjectDashboard({
                       <div className="space-y-1.5">
                         {group.expenses.map((exp) => (
                           <div key={exp.id} className="bg-white p-2.5 rounded-lg border border-slate-200 flex justify-between items-center text-xs">
-                            <span className="font-bold text-slate-800">{exp.title}</span>
+                            <span className="font-bold text-slate-800">
+                              {exp.title || exp.name}
+                              {exp.quantity !== undefined && exp.quantity > 0 ? (
+                                <span className="text-[10px] text-slate-500 ml-1.5 font-normal bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                  Qté: {exp.quantity}
+                                </span>
+                              ) : null}
+                            </span>
                             <div className="flex items-center gap-3 font-mono font-bold">
                               <span className="text-slate-600">Prévu: {formatEuro(exp.planned)}</span>
                               <span className={exp.spent > exp.planned ? 'text-rose-600' : 'text-emerald-600'}>
@@ -2315,32 +2393,48 @@ export default function ProjectDashboard({
                 className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white"
               />
 
-              <div className="grid grid-cols-2 gap-2">
+              {editingGanttItem.item.type === 'milestone' ? (
                 <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Date Début</label>
+                  <label className="block text-[10px] font-bold uppercase text-amber-700 mb-1">Date du jalon (Échéance)</label>
                   <input
                     type="date"
+                    required
                     value={editingGanttItem.item.startDate}
                     onChange={(e) => setEditingGanttItem({
                       ...editingGanttItem,
-                      item: { ...editingGanttItem.item, startDate: e.target.value }
+                      item: { ...editingGanttItem.item, startDate: e.target.value, endDate: e.target.value }
                     })}
-                    className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                    className="w-full text-xs px-2.5 py-1.5 border border-amber-300 rounded bg-amber-50/50 font-bold"
                   />
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Date Fin</label>
-                  <input
-                    type="date"
-                    value={editingGanttItem.item.endDate}
-                    onChange={(e) => setEditingGanttItem({
-                      ...editingGanttItem,
-                      item: { ...editingGanttItem.item, endDate: e.target.value }
-                    })}
-                    className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                  />
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Date Début</label>
+                    <input
+                      type="date"
+                      value={editingGanttItem.item.startDate}
+                      onChange={(e) => setEditingGanttItem({
+                        ...editingGanttItem,
+                        item: { ...editingGanttItem.item, startDate: e.target.value }
+                      })}
+                      className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Date Fin</label>
+                    <input
+                      type="date"
+                      value={editingGanttItem.item.endDate}
+                      onChange={(e) => setEditingGanttItem({
+                        ...editingGanttItem,
+                        item: { ...editingGanttItem.item, endDate: e.target.value }
+                      })}
+                      className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {editingGanttItem.item.type === 'task' && (
                 <div>
@@ -2435,25 +2529,44 @@ export default function ProjectDashboard({
               })}
               className="w-full text-xs px-3 py-2 border border-slate-300 rounded bg-white"
             />
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="number"
-                value={editingExpense.expense.planned}
-                onChange={(e) => setEditingExpense({
-                  ...editingExpense,
-                  expense: { ...editingExpense.expense, planned: Number(e.target.value) }
-                })}
-                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
-              />
-              <input
-                type="number"
-                value={editingExpense.expense.spent}
-                onChange={(e) => setEditingExpense({
-                  ...editingExpense,
-                  expense: { ...editingExpense.expense, spent: Number(e.target.value) }
-                })}
-                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
-              />
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Qté</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={editingExpense.expense.quantity ?? 1}
+                  onChange={(e) => setEditingExpense({
+                    ...editingExpense,
+                    expense: { ...editingExpense.expense, quantity: Number(e.target.value) || 1 }
+                  })}
+                  className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Prévu (€)</label>
+                <input
+                  type="number"
+                  value={editingExpense.expense.planned}
+                  onChange={(e) => setEditingExpense({
+                    ...editingExpense,
+                    expense: { ...editingExpense.expense, planned: Number(e.target.value) }
+                  })}
+                  className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Réel (€)</label>
+                <input
+                  type="number"
+                  value={editingExpense.expense.spent}
+                  onChange={(e) => setEditingExpense({
+                    ...editingExpense,
+                    expense: { ...editingExpense.expense, spent: Number(e.target.value) }
+                  })}
+                  className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
+                />
+              </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setEditingExpense(null)} className="px-3 py-1.5 text-xs font-bold text-slate-600">

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { GanttPhase, GanttItem, TeamMember } from '../types';
-import { Calendar, ChevronRight, ChevronDown, CheckCircle2, Clock } from 'lucide-react';
+import { Clock, ChevronRight, ChevronDown } from 'lucide-react';
 
 interface GanttChartVisualizerProps {
   phases?: GanttPhase[];
@@ -80,7 +80,7 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
 
     if (timeScale === 'months') {
       while (curr < endOfRange) {
-        const monthName = curr.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' });
+        const monthName = curr.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }).toUpperCase();
         cols.push({
           label: monthName,
           date: new Date(curr),
@@ -118,10 +118,10 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
   const getItemPosition = (startDateStr?: string, endDateStr?: string) => {
     const baseMin = minDate ? minDate.getTime() : Date.now();
     const sDate = startDateStr ? new Date(startDateStr) : new Date(baseMin);
-    let eDate = endDateStr ? new Date(endDateStr) : new Date(sDate.getTime() + 24 * 60 * 60 * 1000);
+    let eDate = endDateStr ? new Date(endDateStr) : new Date(sDate.getTime());
 
     if (isNaN(sDate.getTime())) sDate.setTime(baseMin);
-    if (isNaN(eDate.getTime())) eDate.setTime(sDate.getTime() + 24 * 60 * 60 * 1000);
+    if (isNaN(eDate.getTime())) eDate.setTime(sDate.getTime());
 
     const startDiffDays = (sDate.getTime() - baseMin) / (1000 * 60 * 60 * 24);
     const durationDays = Math.max(1, (eDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -129,7 +129,7 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
     const safeTotal = totalDays > 0 ? totalDays : 30;
 
     const leftPct = Math.max(0, Math.min(100, (startDiffDays / safeTotal) * 100));
-    const widthPct = Math.max(1.5, Math.min(100 - leftPct, (durationDays / safeTotal) * 100));
+    const widthPct = Math.max(3, Math.min(100 - leftPct, (durationDays / safeTotal) * 100));
 
     return {
       leftPct: isNaN(leftPct) ? 0 : leftPct,
@@ -137,35 +137,26 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
     };
   };
 
-  // Stats
-  const totalTasks = allItems.filter(i => i.item?.type === 'task').length;
-  const completedTasks = allItems.filter(i => i.item?.type === 'task' && i.item?.progress === 100).length;
-  const totalMilestones = allItems.filter(i => i.item?.type === 'milestone').length;
-  const doneMilestones = allItems.filter(i => i.item?.type === 'milestone' && i.item?.completed).length;
-
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden space-y-4 p-4">
+    <div className="bg-slate-900 rounded-xl border border-slate-800 shadow-xl overflow-hidden p-4 space-y-4 text-slate-100">
       
       {/* Header & Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-        <div>
-          <div className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-indigo-600" />
-            <h3 className="text-sm font-bold text-slate-900">Diagramme de Gantt & Chronogramme du Projet</h3>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Vue temporelle visuelle des jalons et tâches sur le calendrier du projet.
-          </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-indigo-400 shrink-0" />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-300">
+            CHRONOGRAMME DE GANTT VISUEL (TEMPS RÉEL)
+          </h3>
         </div>
 
         <div className="flex items-center gap-2">
           {/* Timeline scale selector */}
-          <div className="bg-slate-100 p-0.5 rounded-lg flex text-xs font-bold">
+          <div className="bg-slate-800/80 p-0.5 rounded-lg flex text-[11px] font-bold border border-slate-700/60">
             <button
               type="button"
               onClick={() => setTimeScale('weeks')}
-              className={`px-3 py-1 rounded-md transition-all ${
-                timeScale === 'weeks' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              className={`px-2.5 py-1 rounded transition-all ${
+                timeScale === 'weeks' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
               }`}
             >
               Semaines
@@ -173,8 +164,8 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
             <button
               type="button"
               onClick={() => setTimeScale('months')}
-              className={`px-3 py-1 rounded-md transition-all ${
-                timeScale === 'months' ? 'bg-white text-indigo-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              className={`px-2.5 py-1 rounded transition-all ${
+                timeScale === 'months' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
               }`}
             >
               Mois
@@ -183,55 +174,22 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
         </div>
       </div>
 
-      {/* Summary KPI Pills */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50/80 p-3 rounded-lg border border-slate-200/60 text-xs">
-        <div className="flex items-center gap-2">
-          <Clock className="w-4 h-4 text-indigo-600 shrink-0" />
-          <div>
-            <span className="text-[10px] text-slate-500 block uppercase font-semibold">Tâches totales</span>
-            <span className="font-bold text-slate-800">{totalTasks} ({completedTasks} terminées)</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          <div>
-            <span className="text-[10px] text-slate-500 block uppercase font-semibold">Jalons validés</span>
-            <span className="font-bold text-slate-800">{doneMilestones} / {totalMilestones}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full bg-indigo-500 shrink-0 inline-block" />
-          <div>
-            <span className="text-[10px] text-slate-500 block uppercase font-semibold">Légende Tâche</span>
-            <span className="text-[11px] text-slate-700 font-medium">■ Barre bleue (0-100%)</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-amber-500 font-bold shrink-0">◆</span>
-          <div>
-            <span className="text-[10px] text-slate-500 block uppercase font-semibold">Légende Jalon</span>
-            <span className="text-[11px] text-slate-700 font-medium">◆ Losange d'échéance</span>
-          </div>
-        </div>
-      </div>
-
       {/* Main Gantt View Table & Timeline Canvas */}
       {safePhases.length === 0 || allItems.length === 0 ? (
-        <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-          <Calendar className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-          <p className="text-xs font-semibold text-slate-600">Aucune phase ni tâche définie dans le planning.</p>
-          <p className="text-[11px] text-slate-400 mt-1">Ajoutez des phases et des éléments dans la liste ci-dessous pour alimenter le chronogramme.</p>
+        <div className="text-center py-10 bg-slate-950/50 rounded-xl border border-dashed border-slate-800">
+          <Clock className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+          <p className="text-xs font-semibold text-slate-400">Aucune phase ni tâche définie dans le planning.</p>
+          <p className="text-[11px] text-slate-500 mt-1">Ajoutez des phases et des éléments dans la liste ci-dessous pour alimenter le chronogramme.</p>
         </div>
       ) : (
-        <div className="border border-slate-200 rounded-xl overflow-x-auto bg-white shadow-2xs">
+        <div className="border border-slate-800 rounded-xl overflow-x-auto bg-slate-950/80 shadow-2xs">
           <div className="min-w-[850px]">
             
             {/* Timeline Header Row */}
-            <div className="flex border-b border-slate-200 bg-slate-100/80 font-bold text-[11px] text-slate-700">
+            <div className="flex border-b border-slate-800 bg-slate-900/90 font-bold text-[11px] text-slate-300">
               {/* Left Column Header */}
-              <div className="w-72 p-3 border-r border-slate-200 shrink-0 flex items-center justify-between">
-                <span>Phase / Élément du Projet</span>
-                <span className="text-[10px] text-slate-400 font-normal">Avancement</span>
+              <div className="w-80 p-3 border-r border-slate-800 shrink-0 flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-200">
+                <span>PHASES / LIVRABLES</span>
               </div>
 
               {/* Right Columns Header */}
@@ -239,7 +197,7 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
                 {timeColumns.map((col, idx) => (
                   <div
                     key={idx}
-                    className="border-r border-slate-200 p-2 text-center text-[10px] font-bold text-slate-600 truncate flex-1 min-w-[60px]"
+                    className="border-r border-slate-800/80 p-2 text-center text-[10px] font-bold text-slate-400 truncate flex-1 min-w-[60px]"
                   >
                     {col.label}
                   </div>
@@ -248,40 +206,36 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
             </div>
 
             {/* Gantt Body: Phase Groups & Tasks */}
-            <div className="divide-y divide-slate-100 text-xs">
+            <div className="divide-y divide-slate-800/60 text-xs">
               {safePhases.map((phase) => {
                 if (!phase) return null;
                 const isCollapsed = !!collapsedPhases[phase.id];
                 const pItems = Array.isArray(phase.items) ? phase.items : [];
-                const phaseProgress = pItems.length > 0
-                  ? Math.round(pItems.reduce((acc, it) => acc + (it?.type === 'milestone' ? (it?.completed ? 100 : 0) : (it?.progress || 0)), 0) / pItems.length)
-                  : 0;
 
                 return (
                   <React.Fragment key={phase.id || Math.random()}>
                     {/* Phase Header Row */}
-                    <div className="flex bg-slate-50/90 font-bold text-slate-800 hover:bg-slate-100/80 transition-colors">
+                    <div className="flex bg-slate-900/60 font-bold text-slate-200 hover:bg-slate-900/90 transition-colors">
                       <div
                         onClick={() => togglePhase(phase.id)}
-                        className="w-72 p-2.5 border-r border-slate-200 shrink-0 flex items-center justify-between cursor-pointer select-none"
+                        className="w-80 p-2.5 border-r border-slate-800 shrink-0 flex items-center justify-between cursor-pointer select-none"
                       >
-                        <div className="flex items-center gap-1.5 truncate">
+                        <div className="flex items-center gap-2 truncate">
                           {isCollapsed ? (
-                            <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
+                            <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
                           ) : (
-                            <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
+                            <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
                           )}
-                          <span className="truncate text-slate-900">{phase.name}</span>
+                          <span className="bg-slate-800 text-amber-300 border border-slate-700/60 px-2 py-0.5 rounded text-[11px] font-bold truncate flex items-center gap-1.5">
+                            📁 {phase.name}
+                          </span>
                         </div>
-                        <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-mono font-bold shrink-0">
-                          {phaseProgress}%
-                        </span>
                       </div>
 
                       {/* Timeline background grid for phase row */}
-                      <div className="flex-1 relative bg-slate-50/50 flex">
+                      <div className="flex-1 relative bg-slate-950/30 flex">
                         {timeColumns.map((col, idx) => (
-                          <div key={idx} className="border-r border-slate-200/50 flex-1 min-w-[60px]" />
+                          <div key={idx} className="border-r border-slate-800/40 flex-1 min-w-[60px]" />
                         ))}
                       </div>
                     </div>
@@ -290,66 +244,41 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
                     {!isCollapsed && pItems.map((item) => {
                       if (!item) return null;
                       const pos = getItemPosition(item.startDate, item.endDate);
-                      const assignedList = Array.isArray(item.assignedTo)
-                        ? item.assignedTo
-                        : typeof item.assignedTo === 'string' && item.assignedTo
-                        ? [item.assignedTo]
-                        : [];
-                      const assignedNames = assignedList
-                        .map(id => (teamMembers || []).find(tm => tm && tm.id === id)?.firstName)
-                        .filter(Boolean)
-                        .join(', ');
+
+                      // Predecessor name lookup
+                      const predecessorItem = item.predecessorId
+                        ? allItems.find(x => x.item && x.item.id === item.predecessorId)?.item
+                        : null;
 
                       return (
-                        <div key={item.id || Math.random()} className="flex hover:bg-indigo-50/30 transition-colors group">
-                          {/* Left Column: Item Name & Controls */}
-                          <div className="w-72 p-2 border-r border-slate-200 shrink-0 flex items-center justify-between gap-2 pl-6">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5">
-                                {item.type === 'milestone' ? (
-                                  <span
-                                    onClick={() => onToggleMilestone && onToggleMilestone(phase.id, item.id, !item.completed)}
-                                    className="cursor-pointer text-amber-500 font-bold text-xs hover:scale-125 transition-transform"
-                                    title="Cliquer pour valider le jalon"
-                                  >
-                                    {item.completed ? '◆✓' : '◆'}
-                                  </span>
-                                ) : (
-                                  <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
-                                )}
-                                <span className={`truncate text-xs font-semibold ${item.completed ? 'line-through text-slate-400' : 'text-slate-800'}`}>
-                                  {item.name}
-                                </span>
-                              </div>
-                              {assignedNames && (
-                                <span className="text-[10px] text-slate-400 block truncate pl-3.5">
-                                  {assignedNames}
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Progress info */}
-                            <div className="shrink-0 text-right">
+                        <div key={item.id || Math.random()} className="flex hover:bg-slate-800/40 transition-colors group">
+                          {/* Left Column: Item Name & Predecessor */}
+                          <div className="w-80 p-2.5 border-r border-slate-800 shrink-0 flex items-center justify-between gap-2 pl-6">
+                            <div className="min-w-0 flex-1 flex items-center gap-2">
                               {item.type === 'milestone' ? (
-                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                  item.completed ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                                }`}>
-                                  {item.completed ? 'Validé' : 'En attente'}
-                                </span>
+                                <span className="text-amber-400 font-bold text-xs shrink-0">◆</span>
                               ) : (
-                                <span className="font-mono text-[10px] font-bold text-indigo-700">
-                                  {item.progress || 0}%
+                                <span className="w-2.5 h-2.5 rounded-xs bg-indigo-500 shrink-0 inline-block" />
+                              )}
+                              <span className={`truncate text-xs font-semibold ${
+                                item.type === 'milestone' ? 'text-amber-300 font-bold' : 'text-slate-200'
+                              }`}>
+                                {item.name}
+                              </span>
+                              {predecessorItem && (
+                                <span className="text-[10px] text-slate-400 italic truncate shrink-0" title={`Prédécesseur: ${predecessorItem.name}`}>
+                                  (🔗 {predecessorItem.name})
                                 </span>
                               )}
                             </div>
                           </div>
 
                           {/* Right Column: Timeline Bar */}
-                          <div className="flex-1 relative flex items-center py-2 px-1 min-h-[42px] overflow-hidden">
+                          <div className="flex-1 relative flex items-center py-2 px-1 min-h-[38px] overflow-hidden">
                             {/* Grid lines */}
                             <div className="absolute inset-0 flex pointer-events-none">
                               {timeColumns.map((col, idx) => (
-                                <div key={idx} className="border-r border-slate-100 flex-1 min-w-[60px]" />
+                                <div key={idx} className="border-r border-slate-800/50 flex-1 min-w-[60px]" />
                               ))}
                             </div>
 
@@ -357,22 +286,20 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
                             {item.type === 'milestone' ? (
                               <div
                                 style={{ left: `${pos.leftPct}%` }}
-                                className="absolute z-10 -translate-x-1/2 flex items-center gap-1"
+                                className="absolute z-10 -translate-x-1/2 flex items-center"
                               >
-                                <div
+                                <button
+                                  type="button"
                                   onClick={() => onToggleMilestone && onToggleMilestone(phase.id, item.id, !item.completed)}
-                                  className={`w-5 h-5 rotate-45 border-2 cursor-pointer transition-all flex items-center justify-center shadow-xs ${
+                                  className={`px-2 py-0.5 rounded-md font-bold text-[10px] shadow-md transition-transform hover:scale-110 flex items-center gap-1 border ${
                                     item.completed
-                                      ? 'bg-emerald-500 border-emerald-600 text-white'
-                                      : 'bg-amber-400 border-amber-500 text-slate-900 hover:scale-110'
+                                      ? 'bg-emerald-600 border-emerald-500 text-white'
+                                      : 'bg-amber-500 border-amber-400 text-slate-950'
                                   }`}
-                                  title={`Jalon: ${item.name} (${formatShortDate(item.startDate)})`}
+                                  title={`Jalon: ${item.name} (Échéance: ${formatShortDate(item.startDate)}) - Cliquez pour basculer la validation`}
                                 >
-                                  <span className="-rotate-45 text-[9px] font-bold">◆</span>
-                                </div>
-                                <span className="text-[10px] font-bold text-slate-700 whitespace-nowrap bg-white/90 px-1 rounded border border-slate-200 shadow-2xs">
-                                  {item.name} ({formatShortDate(item.startDate)})
-                                </span>
+                                  <span>{item.completed ? '✓' : '◆'}</span>
+                                </button>
                               </div>
                             ) : (
                               <div
@@ -380,22 +307,16 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
                                   left: `${pos.leftPct}%`,
                                   width: `${pos.widthPct}%`
                                 }}
-                                className="absolute z-10 h-6 rounded-md bg-indigo-100 border border-indigo-300 shadow-2xs overflow-hidden flex items-center transition-all group-hover:border-indigo-400"
-                                title={`${item.name} (${formatShortDate(item.startDate)} - ${formatShortDate(item.endDate)}) : ${item.progress || 0}%`}
+                                className={`absolute z-10 h-5 rounded-md border shadow-xs overflow-hidden flex items-center justify-center transition-all ${
+                                  item.completed || item.progress === 100
+                                    ? 'bg-emerald-600/90 border-emerald-500 text-white'
+                                    : 'bg-indigo-600/90 border-indigo-400 text-white'
+                                }`}
+                                title={`${item.name} (${formatShortDate(item.startDate)} → ${formatShortDate(item.endDate)}) : ${item.progress || 0}%`}
                               >
-                                {/* Progress fill inside task bar */}
-                                <div
-                                  style={{ width: `${item.progress || 0}%` }}
-                                  className={`h-full transition-all ${
-                                    item.progress === 100
-                                      ? 'bg-emerald-500'
-                                      : 'bg-indigo-600'
-                                  }`}
-                                />
-                                
-                                {/* Text overlay on bar */}
-                                <span className="absolute left-2 text-[10px] font-bold text-slate-900 drop-shadow-2xs truncate max-w-full px-1">
-                                  {item.name}
+                                {/* Percentage ONLY - NO TASK NAME inside bar */}
+                                <span className="text-[10px] font-bold font-mono px-1">
+                                  {item.progress || 0}%
                                 </span>
                               </div>
                             )}
@@ -411,6 +332,22 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
           </div>
         </div>
       )}
+
+      {/* Legend Footer */}
+      <div className="flex flex-wrap items-center gap-6 pt-2 border-t border-slate-800/80 text-[11px] text-slate-400 font-medium">
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block" />
+          <span>Tâche active</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+          <span>Tâche / Jalon validé</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
+          <span>Jalon en attente</span>
+        </div>
+      </div>
 
     </div>
   );
