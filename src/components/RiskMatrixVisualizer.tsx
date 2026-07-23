@@ -18,11 +18,12 @@ interface RiskMatrixVisualizerProps {
 }
 
 export const RiskMatrixVisualizer: React.FC<RiskMatrixVisualizerProps> = ({
-  risks,
+  risks = [],
   onEditRisk,
   onRemoveRisk,
   onAddRiskAtPos,
 }) => {
+  const safeRisks = Array.isArray(risks) ? risks : [];
   const [selectedCell, setSelectedCell] = useState<{ prob: number; impact: number } | null>(null);
   const [activeRiskId, setActiveRiskId] = useState<string | null>(null);
 
@@ -46,14 +47,14 @@ export const RiskMatrixVisualizer: React.FC<RiskMatrixVisualizerProps> = ({
   };
 
   // Stats calculation
-  const totalRisks = risks.length;
-  const criticalRisks = risks.filter(r => r.prob * r.impact >= 15);
-  const highRisks = risks.filter(r => r.prob * r.impact >= 10 && r.prob * r.impact < 15);
-  const mediumRisks = risks.filter(r => r.prob * r.impact >= 5 && r.prob * r.impact < 10);
-  const lowRisks = risks.filter(r => r.prob * r.impact < 5);
+  const totalRisks = safeRisks.length;
+  const criticalRisks = safeRisks.filter(r => r && (r.prob || 1) * (r.impact || 1) >= 15);
+  const highRisks = safeRisks.filter(r => r && (r.prob || 1) * (r.impact || 1) >= 10 && (r.prob || 1) * (r.impact || 1) < 15);
+  const mediumRisks = safeRisks.filter(r => r && (r.prob || 1) * (r.impact || 1) >= 5 && (r.prob || 1) * (r.impact || 1) < 10);
+  const lowRisks = safeRisks.filter(r => r && (r.prob || 1) * (r.impact || 1) < 5);
 
   const avgScore = totalRisks > 0
-    ? (risks.reduce((acc, r) => acc + (r.prob * r.impact), 0) / totalRisks).toFixed(1)
+    ? (safeRisks.reduce((acc, r) => acc + ((r?.prob || 1) * (r?.impact || 1)), 0) / totalRisks).toFixed(1)
     : '0';
 
   // Helper for cell styling based on Criticality Score
@@ -77,8 +78,8 @@ export const RiskMatrixVisualizer: React.FC<RiskMatrixVisualizerProps> = ({
   };
 
   const filteredRisks = selectedCell
-    ? risks.filter(r => r.prob === selectedCell.prob && r.impact === selectedCell.impact)
-    : risks;
+    ? safeRisks.filter(r => r && r.prob === selectedCell.prob && r.impact === selectedCell.impact)
+    : safeRisks;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-5 space-y-6">
@@ -173,7 +174,7 @@ export const RiskMatrixVisualizer: React.FC<RiskMatrixVisualizerProps> = ({
                   {/* 5 Columns for Probability */}
                   <div className="grid grid-cols-5 gap-1.5 flex-1">
                     {probabilities.map((prob) => {
-                      const cellRisks = risks.filter(r => r.prob === prob && r.impact === imp);
+                      const cellRisks = safeRisks.filter(r => r && r.prob === prob && r.impact === imp);
                       const isSelected = selectedCell?.prob === prob && selectedCell?.impact === imp;
                       const cellScore = prob * imp;
 

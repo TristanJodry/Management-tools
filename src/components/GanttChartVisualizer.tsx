@@ -290,7 +290,12 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
                     {!isCollapsed && pItems.map((item) => {
                       if (!item) return null;
                       const pos = getItemPosition(item.startDate, item.endDate);
-                      const assignedNames = (item.assignedTo || [])
+                      const assignedList = Array.isArray(item.assignedTo)
+                        ? item.assignedTo
+                        : typeof item.assignedTo === 'string' && item.assignedTo
+                        ? [item.assignedTo]
+                        : [];
+                      const assignedNames = assignedList
                         .map(id => (teamMembers || []).find(tm => tm && tm.id === id)?.firstName)
                         .filter(Boolean)
                         .join(', ');
