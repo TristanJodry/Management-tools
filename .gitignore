@@ -12,3 +12,6 @@ data/
 backups/
 db.json
 *.sqlite
+
+# Admin credentials & config local persistence
+src/config/adminConfig.ts

@@ -73,71 +73,7 @@ export const MODULE_LABELS: Record<ModuleKey, { label: string; description: stri
   }
 };
 
-export const DEFAULT_GROUPS: UserGroup[] = [
-  {
-    id: 'grp-chefs-projets',
-    name: 'Chefs de Projet',
-    description: 'Accès complet en modification sur la gestion des projets attribués',
-    permissions: {
-      project_management: true,
-      team_management: false,
-      charter: true,
-      gantt: true,
-      workload: true,
-      budget: true,
-      risks: true,
-      governance: true,
-      decision: true,
-      kpis: true,
-      rex: true,
-      documents: true,
-      closure: true,
-      templates: true
-    }
-  },
-  {
-    id: 'grp-finance-controle',
-    name: 'Contrôle de Gestion & Finance',
-    description: 'Accès en modification sur le Budget et les KPIs, lecture seule sur le reste',
-    permissions: {
-      project_management: false,
-      team_management: false,
-      charter: false,
-      gantt: false,
-      workload: false,
-      budget: true,
-      risks: false,
-      governance: false,
-      decision: true,
-      kpis: true,
-      rex: false,
-      documents: true,
-      closure: false,
-      templates: true
-    }
-  },
-  {
-    id: 'grp-observateurs',
-    name: 'Observateurs & Auditeurs (Lecture seule)',
-    description: 'Consultation uniquement de tous les modules sans possibilité de modifier',
-    permissions: {
-      project_management: false,
-      team_management: false,
-      charter: false,
-      gantt: false,
-      workload: false,
-      budget: false,
-      risks: false,
-      governance: false,
-      decision: false,
-      kpis: false,
-      rex: false,
-      documents: false,
-      closure: false,
-      templates: true
-    }
-  }
-];
+export const DEFAULT_GROUPS: UserGroup[] = [];
 
 export function hasWritePermission(
   user: UserAccount | null,

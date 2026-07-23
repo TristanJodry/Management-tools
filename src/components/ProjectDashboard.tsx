@@ -1175,6 +1175,35 @@ export default function ProjectDashboard({
                           </h4>
 
                           <div className="space-y-2.5">
+                            {globalTeam && globalTeam.length > 0 && (
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                                  Choisir depuis les utilisateurs
+                                </label>
+                                <select
+                                  onChange={(e) => {
+                                    const memberId = e.target.value;
+                                    if (memberId) {
+                                      const found = globalTeam.find((m) => m.id === memberId);
+                                      if (found) {
+                                        setShName(`${found.firstName} ${found.lastName}`.trim());
+                                        setShRole(found.role || 'Membre d’équipe');
+                                      }
+                                    }
+                                  }}
+                                  defaultValue=""
+                                  className="w-full text-xs px-2.5 py-1.5 border border-indigo-200 dark:border-indigo-800 rounded bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-900 dark:text-indigo-200 font-semibold"
+                                >
+                                  <option value="">-- Importer un utilisateur existant --</option>
+                                  {globalTeam.map((m) => (
+                                    <option key={m.id} value={m.id}>
+                                      {m.firstName} {m.lastName} ({m.role || 'Collaborateur'})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+
                             <div>
                               <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Groupe Cible</label>
                               <select

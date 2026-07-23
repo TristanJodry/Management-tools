@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserAccount } from '../types';
-import { Lock, User, Key, AlertCircle, LogIn, ShieldCheck, Info } from 'lucide-react';
+import { Lock, User, Key, AlertCircle, LogIn } from 'lucide-react';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -151,31 +151,6 @@ export default function LoginModal({
                 className="w-full text-xs pl-9 pr-3 py-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500/20"
               />
             </div>
-          </div>
-
-          <div className="p-3 bg-indigo-50/70 dark:bg-slate-800 rounded-xl border border-indigo-100 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-300 space-y-1.5">
-            <div className="flex items-center justify-between font-bold text-indigo-700 dark:text-indigo-400">
-              <div className="flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5" />
-                <span>Accès Administrateur Principal :</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setUsernameInput('admin');
-                  setPasswordInput('admin123');
-                }}
-                className="text-[10px] font-bold text-indigo-600 dark:text-indigo-300 hover:underline cursor-pointer bg-indigo-100/80 dark:bg-indigo-900/50 px-2 py-0.5 rounded"
-              >
-                Auto-remplir admin
-              </button>
-            </div>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400">
-              Identifiant : <code className="font-mono bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded text-slate-900 dark:text-slate-100">admin</code> | Mot de passe : <code className="font-mono bg-slate-200 dark:bg-slate-700 px-1 py-0.5 rounded text-slate-900 dark:text-slate-100">admin123</code>
-            </p>
-            <p className="text-[9px] text-slate-400 italic">
-              Mot de passe haché (PBKDF2 SHA-512). Pour le modifier : <code className="font-mono">npm run change-admin-pass &lt;mdp&gt;</code>
-            </p>
           </div>
 
           <div className="flex gap-2 pt-2">

@@ -352,9 +352,11 @@ function getAllUsers(): any[] {
 }
 
 function processUsersPasswords(usersList: any[]): any[] {
+  const existingUsers = getAllUsers();
   return usersList.map((u) => {
-    if (u.password && !u.passwordHash) {
-      const { hash, salt } = hashPassword(u.password);
+    // If a new plain-text password was provided, hash it with PBKDF2 SHA-512
+    if (u.password && typeof u.password === 'string' && u.password.trim() !== '') {
+      const { hash, salt } = hashPassword(u.password.trim());
       return {
         ...u,
         passwordHash: hash,
@@ -362,7 +364,27 @@ function processUsersPasswords(usersList: any[]): any[] {
         password: ''
       };
     }
-    return u;
+    // Otherwise keep existing passwordHash and salt
+    const existing = existingUsers.find((ex) => ex.id === u.id);
+    if (existing) {
+      return {
+        ...u,
+        passwordHash: u.passwordHash || existing.passwordHash,
+        salt: u.salt || existing.salt,
+        password: ''
+      };
+    }
+    return {
+      ...u,
+      password: ''
+    };
+  });
+}
+
+function sanitizeUsers(usersList: any[]): any[] {
+  return usersList.map((u) => {
+    const { password: _, passwordHash: __, salt: ___, ...safeUser } = u;
+    return safeUser;
   });
 }
 
@@ -406,7 +428,7 @@ app.get('/api/data', (_req, res) => {
   const projects = getAllProjects();
   const globalTeam = getAllTeam();
   const userGroups = getAllGroups();
-  const users = getAllUsers();
+  const users = sanitizeUsers(getAllUsers());
   res.json({ projects, globalTeam, userGroups, users });
 });
 
@@ -428,7 +450,7 @@ app.post('/api/data', (req, res) => {
       projects: getAllProjects(),
       globalTeam: getAllTeam(),
       userGroups: getAllGroups(),
-      users: getAllUsers()
+      users: sanitizeUsers(getAllUsers())
     });
   } else {
     res.status(500).json({ error: 'Échec de sauvegarde des données' });
@@ -476,7 +498,7 @@ app.post('/api/groups', (req, res) => {
 });
 
 app.get('/api/users', (_req, res) => {
-  res.json({ users: getAllUsers() });
+  res.json({ users: sanitizeUsers(getAllUsers()) });
 });
 
 app.post('/api/users', (req, res) => {
@@ -485,7 +507,7 @@ app.post('/api/users', (req, res) => {
     return res.status(400).json({ error: 'users doit être un tableau' });
   }
   if (saveUsersToDb(users)) {
-    res.json({ success: true, users: getAllUsers() });
+    res.json({ success: true, users: sanitizeUsers(getAllUsers()) });
   } else {
     res.status(500).json({ error: 'Échec sauvegarde des utilisateurs' });
   }

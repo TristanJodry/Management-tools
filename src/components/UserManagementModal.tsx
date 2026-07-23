@@ -139,7 +139,7 @@ export default function UserManagementModal({
   const openEditUser = (u: UserAccount) => {
     setEditingUser(u);
     setUsername(u.username);
-    setPassword(u.password || '');
+    setPassword(''); // Leave empty so plain password is not displayed
     setFirstName(u.firstName);
     setLastName(u.lastName);
     setEmail(u.email || '');
@@ -531,11 +531,13 @@ export default function UserManagementModal({
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Mot de passe (*)</label>
+                      <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
+                        Mot de passe {editingUser ? '(laisser vide pour conserver)' : '(*)'}
+                      </label>
                       <input
-                        type="text"
-                        required
-                        placeholder="Mot de passe"
+                        type="password"
+                        required={!editingUser}
+                        placeholder={editingUser ? '••••••••' : 'Mot de passe'}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="w-full text-xs px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500/20 font-mono"
