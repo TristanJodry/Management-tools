@@ -220,7 +220,11 @@ export interface CommonTemplate {
   category: string;
   description: string;
   downloadUrl?: string;
+  fileData?: string; // Base64 data if uploaded
+  fileName?: string;
   fileSize?: string;
+  uploadedBy?: string;
+  uploadedAt?: string;
 }
 
 export interface ProjectDocument {

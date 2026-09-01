@@ -93,6 +93,11 @@ async function initDatabase() {
         data TEXT NOT NULL,
         updated_at TEXT
       );
+      CREATE TABLE IF NOT EXISTS referentiel (
+        id TEXT PRIMARY KEY,
+        data TEXT NOT NULL,
+        updated_at TEXT
+      );
       CREATE TABLE IF NOT EXISTS app_state (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -423,34 +428,103 @@ function saveUsersToDb(users: any[]): boolean {
   }
 }
 
+function getAllReferentiel(): any[] {
+  if (!db) {
+    try {
+      if (fs.existsSync(JSON_FILE)) {
+        const raw = fs.readFileSync(JSON_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed.referentiel) ? parsed.referentiel : [];
+      }
+    } catch {
+      return [];
+    }
+    return [];
+  }
+
+  try {
+    const stmt = db.prepare('SELECT data FROM referentiel');
+    const results: any[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      if (row.data) {
+        results.push(JSON.parse(row.data as string));
+      }
+    }
+    stmt.free();
+    return results;
+  } catch (err) {
+    console.error('Erreur lecture référentiel :', err);
+    return [];
+  }
+}
+
+function saveReferentielToDb(items: any[]): boolean {
+  if (!db) {
+    try {
+      let current: any = { projects: [], globalTeam: [], userGroups: [], users: [], referentiel: [] };
+      if (fs.existsSync(JSON_FILE)) {
+        current = JSON.parse(fs.readFileSync(JSON_FILE, 'utf-8'));
+      }
+      current.referentiel = items;
+      fs.writeFileSync(JSON_FILE, JSON.stringify(current, null, 2), 'utf-8');
+      return true;
+    } catch (err) {
+      console.error('Erreur sauvegarde référentiel JSON :', err);
+      return false;
+    }
+  }
+
+  try {
+    db.run('DELETE FROM referentiel');
+    const now = new Date().toISOString();
+    for (const item of items) {
+      db.run('INSERT INTO referentiel (id, data, updated_at) VALUES (?, ?, ?)', [
+        item.id || `ref-${Date.now()}`,
+        JSON.stringify(item),
+        now,
+      ]);
+    }
+    saveSqliteFile();
+    return true;
+  } catch (err) {
+    console.error('Erreur sauvegarde référentiel BDD :', err);
+    return false;
+  }
+}
+
 // API Routes
 app.get('/api/data', (_req, res) => {
   const projects = getAllProjects();
   const globalTeam = getAllTeam();
   const userGroups = getAllGroups();
   const users = sanitizeUsers(getAllUsers());
-  res.json({ projects, globalTeam, userGroups, users });
+  const referentiel = getAllReferentiel();
+  res.json({ projects, globalTeam, userGroups, users, referentiel });
 });
 
 app.post('/api/data', (req, res) => {
-  const { projects, globalTeam, userGroups, users } = req.body;
+  const { projects, globalTeam, userGroups, users, referentiel } = req.body;
   let pOk = true;
   let tOk = true;
   let gOk = true;
   let uOk = true;
+  let rOk = true;
 
   if (Array.isArray(projects)) pOk = saveProjectsToDb(projects);
   if (Array.isArray(globalTeam)) tOk = saveTeamToDb(globalTeam);
   if (Array.isArray(userGroups)) gOk = saveGroupsToDb(userGroups);
   if (Array.isArray(users)) uOk = saveUsersToDb(users);
+  if (Array.isArray(referentiel)) rOk = saveReferentielToDb(referentiel);
 
-  if (pOk && tOk && gOk && uOk) {
+  if (pOk && tOk && gOk && uOk && rOk) {
     res.json({
       success: true,
       projects: getAllProjects(),
       globalTeam: getAllTeam(),
       userGroups: getAllGroups(),
-      users: sanitizeUsers(getAllUsers())
+      users: sanitizeUsers(getAllUsers()),
+      referentiel: getAllReferentiel()
     });
   } else {
     res.status(500).json({ error: 'Échec de sauvegarde des données' });
@@ -510,6 +584,22 @@ app.post('/api/users', (req, res) => {
     res.json({ success: true, users: sanitizeUsers(getAllUsers()) });
   } else {
     res.status(500).json({ error: 'Échec sauvegarde des utilisateurs' });
+  }
+});
+
+app.get('/api/referentiel', (_req, res) => {
+  res.json({ referentiel: getAllReferentiel() });
+});
+
+app.post('/api/referentiel', (req, res) => {
+  const { referentiel } = req.body;
+  if (!Array.isArray(referentiel)) {
+    return res.status(400).json({ error: 'referentiel doit être un tableau' });
+  }
+  if (saveReferentielToDb(referentiel)) {
+    res.json({ success: true, referentiel: getAllReferentiel() });
+  } else {
+    res.status(500).json({ error: 'Échec sauvegarde du référentiel' });
   }
 });
 

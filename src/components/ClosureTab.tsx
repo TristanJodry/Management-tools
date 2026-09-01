@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Project, ProjectClosureData } from '../types';
-import { FileSignature, CheckCircle2, Lock, Save, ShieldCheck, AlertCircle } from 'lucide-react';
+import { FileSignature, CheckCircle2, Lock, Save, ShieldCheck, AlertCircle, Download } from 'lucide-react';
+import { exportClosurePDF } from '../utils/pdfExport';
 
 interface ClosureTabProps {
   project: Project;
@@ -59,6 +60,14 @@ export default function ClosureTab({ project, onUpdateProject, canEdit = true }:
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => exportClosurePDF(project)}
+            className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            title="Télécharger le PV de clôture en PDF"
+          >
+            <Download className="w-3.5 h-3.5" /> Télécharger en PDF
+          </button>
           {formState.isClosed ? (
             <span className="px-3 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-full text-xs flex items-center gap-1.5 border border-emerald-200">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Projet Officiellement Clôturé

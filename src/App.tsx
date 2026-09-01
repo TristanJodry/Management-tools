@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Project, TeamMember, UserAccount, UserGroup } from './types';
-import { INITIAL_PROJECTS, COMMON_TEMPLATES } from './data';
+import { Project, TeamMember, UserAccount, UserGroup, CommonTemplate } from './types';
+import { INITIAL_PROJECTS } from './data';
 import { DEFAULT_GROUPS, hasWritePermission } from './utils/permissions';
 import { ADMIN_CONFIG } from './config/adminConfig';
 import GlobalStats from './components/GlobalStats';
@@ -15,6 +15,7 @@ import ProjectDashboard from './components/ProjectDashboard';
 import UserManagementModal from './components/UserManagementModal';
 import LoginModal from './components/LoginModal';
 import UserProfileModal from './components/UserProfileModal';
+import ReferentielModal from './components/ReferentielModal';
 import { 
   FolderKanban, 
   Plus, 
@@ -46,6 +47,7 @@ export default function App() {
   // RBAC & Auth state
   const [userGroups, setUserGroups] = useState<UserGroup[]>(DEFAULT_GROUPS);
   const [users, setUsers] = useState<UserAccount[]>([]);
+  const [referentielTemplates, setReferentielTemplates] = useState<CommonTemplate[]>([]);
   
   // Dynamic global team members derived from created user accounts
   const globalTeam: TeamMember[] = users.map((u) => ({
@@ -131,14 +133,35 @@ export default function App() {
         } else {
           loadFromLocalStorageUsers();
         }
+
+        if (data && Array.isArray(data.referentiel)) {
+          setReferentielTemplates(data.referentiel);
+          localStorage.setItem('pm_app_referentiel', JSON.stringify(data.referentiel));
+        } else {
+          loadFromLocalStorageReferentiel();
+        }
       })
       .catch((err) => {
         console.warn('Could not fetch data from server, falling back to localStorage:', err);
         loadFromLocalStorageProjects();
         loadFromLocalStorageGroups();
         loadFromLocalStorageUsers();
+        loadFromLocalStorageReferentiel();
       });
   }, []);
+
+  const loadFromLocalStorageReferentiel = () => {
+    const saved = localStorage.getItem('pm_app_referentiel');
+    if (saved) {
+      try {
+        setReferentielTemplates(JSON.parse(saved));
+      } catch {
+        setReferentielTemplates([]);
+      }
+    } else {
+      setReferentielTemplates([]);
+    }
+  };
 
   const loadFromLocalStorageProjects = () => {
     const savedProjects = localStorage.getItem('pm_app_projects_v2');
@@ -202,6 +225,17 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ users: updatedUsers })
     }).catch((err) => console.error('Failed to sync users to server:', err));
+  };
+
+  const saveReferentielTemplates = (updatedTemplates: CommonTemplate[]) => {
+    setReferentielTemplates(updatedTemplates);
+    localStorage.setItem('pm_app_referentiel', JSON.stringify(updatedTemplates));
+
+    fetch('/api/referentiel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ referentiel: updatedTemplates })
+    }).catch((err) => console.error('Failed to sync referentiel to server:', err));
   };
 
   const handleLogout = () => {
@@ -519,77 +553,14 @@ export default function App() {
         </div>
       )}
 
-      {/* FLOATING DRAWER OVERLAY: RÉFÉRENTIEL COMMUN */}
-      {isTemplateOverlayOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-md h-full shadow-2xl border-l border-slate-200 flex flex-col">
-            
-            {/* Drawer Header */}
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <div className="space-y-0.5">
-                <h4 className="font-bold text-slate-900 font-display text-sm">
-                  Référentiel Commun
-                </h4>
-                <p className="text-[11px] text-slate-400">
-                  Modèles de documents méthodologiques standards
-                </p>
-              </div>
-              <button
-                onClick={() => setIsTemplateOverlayOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Drawer Body (Template list) */}
-            <div className="p-5 overflow-y-auto flex-1 space-y-3.5">
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Téléchargez ces modèles normés pour les adapter aux besoins spécifiques de vos différents projets d'ingénierie et d'organisation.
-              </p>
-
-              <div className="space-y-2">
-                {COMMON_TEMPLATES.map((template) => (
-                  <div
-                    key={template.id}
-                    className="p-3 border border-slate-200/80 rounded-xl bg-slate-50/50 hover:bg-slate-50 flex items-start justify-between gap-3 text-xs transition-colors group"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 text-[9px] font-bold uppercase">
-                          {template.category}
-                        </span>
-                        <span className="font-bold text-slate-800">{template.title}</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 leading-normal">{template.description}</p>
-                      <span className="text-[10px] text-slate-400 font-mono">Poids : {template.fileSize}</span>
-                    </div>
-
-                    <button
-                      onClick={() => downloadTemplate(template.title, template.fileSize || 'N/A')}
-                      className="p-1.5 bg-white border border-slate-200 rounded-lg text-indigo-600 hover:text-indigo-800 hover:border-indigo-400 hover:bg-indigo-50 transition-all shadow-xs shrink-0 self-center"
-                      title="Télécharger le modèle"
-                    >
-                      <Download className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Drawer Footer */}
-            <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
-              <button
-                onClick={() => setIsTemplateOverlayOpen(false)}
-                className="w-full py-2 bg-slate-200 hover:bg-slate-300/80 text-slate-700 font-semibold rounded-lg text-xs transition-colors cursor-pointer"
-              >
-                Fermer le référentiel
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
+      {/* MODAL: RÉFÉRENTIEL COMMUN DE DOCUMENTS */}
+      <ReferentielModal
+        isOpen={isTemplateOverlayOpen}
+        onClose={() => setIsTemplateOverlayOpen(false)}
+        templates={referentielTemplates}
+        onSaveTemplates={saveReferentielTemplates}
+        currentUser={currentUser}
+      />
 
       {/* USER MANAGEMENT & RBAC MODAL */}
       <UserManagementModal

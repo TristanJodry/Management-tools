@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Project, DecisionItem, DecisionCriterion, DecisionOption } from '../types';
-import { Sliders, Plus, Trash2, Edit3, CheckCircle, Award, Scale, HelpCircle } from 'lucide-react';
+import { Sliders, Plus, Trash2, Edit3, CheckCircle, Award, Scale, HelpCircle, Download } from 'lucide-react';
+import { exportDecisionMatrixPDF } from '../utils/pdfExport';
 
 interface DecisionMatrixTabProps {
   project: Project;
@@ -213,14 +214,23 @@ export default function DecisionMatrixTab({ project, onUpdateProject, canEdit = 
             Pondérez les critères, évaluez les options comparatives et sélectionnez objectivement la meilleure alternative.
           </p>
         </div>
-        {canEdit && (
+        <div className="flex items-center gap-2 self-start sm:self-auto">
           <button
-            onClick={() => setShowAddDecision(true)}
-            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors shadow-xs flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+            onClick={() => exportDecisionMatrixPDF(project)}
+            className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            title="Télécharger la matrice de décision en PDF"
           >
-            <Plus className="w-4 h-4" /> Nouvelle Décision
+            <Download className="w-4 h-4" /> Télécharger en PDF
           </button>
-        )}
+          {canEdit && (
+            <button
+              onClick={() => setShowAddDecision(true)}
+              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Nouvelle Décision
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Decision selection selector */}

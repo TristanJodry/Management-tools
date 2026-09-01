@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Project, ProjectDocumentItem } from '../types';
-import { FileText, Plus, Search, Trash2, Edit3, Download, Eye, FileCheck, BookOpen, ExternalLink } from 'lucide-react';
-import { COMMON_TEMPLATES } from '../data';
+import { FileText, Plus, Search, Trash2, Edit3, Download, Eye, FileCheck, ExternalLink } from 'lucide-react';
 
 interface DocumentsTabProps {
   project: Project;
@@ -199,36 +198,6 @@ export default function DocumentsTab({ project, onUpdateProject, canEdit = true 
           ))}
         </div>
       )}
-
-      {/* Templates Library Section */}
-      <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-          <BookOpen className="w-4 h-4 text-indigo-600" />
-          Bibliothèque de Modèles & Gabarits Types à Télécharger
-        </h4>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          {COMMON_TEMPLATES.map((tmpl) => (
-            <div key={tmpl.id} className="bg-white p-3 rounded-lg border border-slate-200 space-y-2 shadow-2xs">
-              <span className="text-[9px] font-bold text-indigo-800 bg-indigo-50 px-1.5 py-0.2 rounded uppercase">
-                {tmpl.category}
-              </span>
-              <h5 className="text-xs font-bold text-slate-900">{tmpl.title}</h5>
-              <p className="text-[10px] text-slate-500 line-clamp-2">{tmpl.description}</p>
-              <a
-                href={tmpl.downloadUrl || '#'}
-                onClick={(e) => {
-                  e.preventDefault();
-                  alert(`Téléchargement du modèle "${tmpl.title}" initié !`);
-                }}
-                className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 pt-1"
-              >
-                <Download className="w-3 h-3" /> Télécharger le gabarit
-              </a>
-            </div>
-          ))}
-        </div>
-      </div>
 
       {/* Add Document Modal */}
       {showAddModal && (

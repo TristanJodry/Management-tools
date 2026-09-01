@@ -55,8 +55,22 @@ import {
   Edit3,
   Copy,
   Paperclip,
-  RotateCw
+  RotateCw,
+  Download
 } from 'lucide-react';
+
+import {
+  exportStakeholdersPDF,
+  exportDecisionMatrixPDF,
+  exportPlanificationPDF,
+  exportRaciPDF,
+  exportRisksPDF,
+  exportBudgetPDF,
+  exportCommunicationPDF,
+  exportKpisPDF,
+  exportClosurePDF,
+  exportRexPDF
+} from '../utils/pdfExport';
 
 import TeamCharterTab from './TeamCharterTab';
 import DecisionMatrixTab from './DecisionMatrixTab';
@@ -858,6 +872,35 @@ export default function ProjectDashboard({
     return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(val);
   };
 
+  const getPdfButtonInfo = () => {
+    switch (activeTab) {
+      case 'stakeholders':
+        return { label: 'Télécharger Parties Prenantes en PDF', fn: () => exportStakeholdersPDF(project, globalTeam) };
+      case 'decisionMatrix':
+        return { label: 'Télécharger Matrice de Décision en PDF', fn: () => exportDecisionMatrixPDF(project) };
+      case 'planification':
+        return { label: 'Télécharger Diagramme de Gantt en PDF', fn: () => exportPlanificationPDF(project, globalTeam) };
+      case 'organisation':
+        return { label: 'Télécharger Matrice RACI en PDF', fn: () => exportRaciPDF(project, globalTeam) };
+      case 'risks':
+        return { label: 'Télécharger Matrice des Risques en PDF', fn: () => exportRisksPDF(project) };
+      case 'budget':
+        return { label: 'Télécharger Budget en PDF', fn: () => exportBudgetPDF(project) };
+      case 'communication':
+        return { label: 'Télécharger Communication & Gouvernance en PDF', fn: () => exportCommunicationPDF(project) };
+      case 'kpis':
+        return { label: 'Télécharger Tableau de Bord KPI en PDF', fn: () => exportKpisPDF(project) };
+      case 'close':
+        return { label: 'Télécharger PV de Clôture en PDF', fn: () => exportClosurePDF(project) };
+      case 'rex':
+        return { label: 'Télécharger Bilan REX en PDF', fn: () => exportRexPDF(project) };
+      default:
+        return null;
+    }
+  };
+
+  const currentPdfInfo = getPdfButtonInfo();
+
   return (
     <div className="space-y-6">
       
@@ -1063,36 +1106,49 @@ export default function ProjectDashboard({
       <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
         
         {/* Navigation Tabs (Ordered strictly as requested) */}
-        <div className="flex flex-wrap border-b border-slate-200 bg-slate-50/50">
-          {[
-            { id: 'stakeholders', label: 'Parties Prenantes', icon: Users },
-            { id: 'decisionMatrix', label: 'Matrice de Décision', icon: Sliders },
-            { id: 'planification', label: 'Planification', icon: Layers },
-            { id: 'organisation', label: 'Organisation (RACI)', icon: Briefcase },
-            { id: 'risks', label: 'Risques', icon: ShieldAlert },
-            { id: 'budget', label: 'Budget', icon: PiggyBank },
-            { id: 'communication', label: 'Communication', icon: MessageSquare },
-            { id: 'kpis', label: 'KPI', icon: Target },
-            { id: 'close', label: 'Clôture', icon: FileSignature },
-            { id: 'rex', label: 'REX', icon: HeartHandshake },
-            { id: 'docs', label: 'Espace Documents', icon: FileText }
-          ].map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
-                  activeTab === tab.id 
-                    ? 'border-indigo-600 text-indigo-600 bg-white' 
-                    : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-100/50'
-                }`}
-              >
-                <Icon className="w-4 h-4 shrink-0" />
-                {tab.label}
-              </button>
-            );
-          })}
+        <div className="flex flex-wrap items-center justify-between border-b border-slate-200 bg-slate-50/50">
+          <div className="flex flex-wrap">
+            {[
+              { id: 'stakeholders', label: 'Parties Prenantes', icon: Users },
+              { id: 'decisionMatrix', label: 'Matrice de Décision', icon: Sliders },
+              { id: 'planification', label: 'Planification', icon: Layers },
+              { id: 'organisation', label: 'Organisation (RACI)', icon: Briefcase },
+              { id: 'risks', label: 'Risques', icon: ShieldAlert },
+              { id: 'budget', label: 'Budget', icon: PiggyBank },
+              { id: 'communication', label: 'Communication', icon: MessageSquare },
+              { id: 'kpis', label: 'KPI', icon: Target },
+              { id: 'close', label: 'Clôture', icon: FileSignature },
+              { id: 'rex', label: 'REX', icon: HeartHandshake },
+              { id: 'docs', label: 'Espace Documents', icon: FileText }
+            ].map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`py-3 px-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 ${
+                    activeTab === tab.id 
+                      ? 'border-indigo-600 text-indigo-600 bg-white' 
+                      : 'border-transparent text-slate-500 hover:text-slate-900 hover:bg-slate-100/50'
+                  }`}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {currentPdfInfo && (
+            <button
+              onClick={currentPdfInfo.fn}
+              className="my-2 mr-4 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0"
+              title={currentPdfInfo.label}
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>{currentPdfInfo.label}</span>
+            </button>
+          )}
         </div>
 
         {/* Tab content area */}
@@ -1103,27 +1159,37 @@ export default function ProjectDashboard({
             <div className="space-y-6">
               
               {/* Sub-tabs header */}
-              <div className="flex border-b border-slate-200 pb-2 gap-4">
+              <div className="flex border-b border-slate-200 pb-2 gap-4 items-center justify-between">
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setStakeholderSubTab('list')}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                      stakeholderSubTab === 'list'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    Groupes & Parties Prenantes
+                  </button>
+                  <button
+                    onClick={() => setStakeholderSubTab('charter')}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                      stakeholderSubTab === 'charter'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <FileSignature className="w-3.5 h-3.5" />
+                    Charte d'Équipe
+                  </button>
+                </div>
+
                 <button
-                  onClick={() => setStakeholderSubTab('list')}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                    stakeholderSubTab === 'list'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
+                  onClick={() => exportStakeholdersPDF(project, globalTeam)}
+                  className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="Télécharger les parties prenantes en PDF"
                 >
-                  Groupes & Parties Prenantes
-                </button>
-                <button
-                  onClick={() => setStakeholderSubTab('charter')}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                    stakeholderSubTab === 'charter'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  <FileSignature className="w-3.5 h-3.5" />
-                  Charte d'Équipe
+                  <Download className="w-3.5 h-3.5" /> Télécharger en PDF
                 </button>
               </div>
 
@@ -1353,27 +1419,38 @@ export default function ProjectDashboard({
           {activeTab === 'planification' && (
             <div className="space-y-6">
               {/* Planification Sub-tabs */}
-              <div className="flex border-b border-slate-200 pb-2 gap-4">
+              <div className="flex border-b border-slate-200 pb-2 gap-4 items-center justify-between">
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setPlanificationSubTab('gantt')}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                      planificationSubTab === 'gantt'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    Planning & Gantt
+                  </button>
+                  <button
+                    onClick={() => setPlanificationSubTab('workload')}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                      planificationSubTab === 'workload'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    Gestion du Temps & Charge
+                  </button>
+                </div>
+
                 <button
-                  onClick={() => setPlanificationSubTab('gantt')}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                    planificationSubTab === 'gantt'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
+                  type="button"
+                  onClick={() => exportPlanificationPDF(project, globalTeam)}
+                  className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="Télécharger la planification en PDF"
                 >
-                  Planning & Gantt
-                </button>
-                <button
-                  onClick={() => setPlanificationSubTab('workload')}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                    planificationSubTab === 'workload'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  <Clock className="w-3.5 h-3.5" />
-                  Gestion du Temps & Charge
+                  <Download className="w-3.5 h-3.5" /> Télécharger en PDF
                 </button>
               </div>
 
@@ -1679,6 +1756,14 @@ export default function ProjectDashboard({
                     Définissez la matrice R (Réalise), A (Approuve), C (Consulté), I (Informé) par ligne de tâche/jalon.
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => exportRaciPDF(project, globalTeam)}
+                  className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
+                  title="Télécharger la matrice RACI en PDF"
+                >
+                  <Download className="w-3.5 h-3.5" /> Télécharger en PDF
+                </button>
               </div>
 
               {/* Add Custom Row */}
@@ -1777,6 +1862,14 @@ export default function ProjectDashboard({
                   <h3 className="text-sm font-bold text-slate-800">Ajouter / Modifier un Risque dans le Registre</h3>
                   <p className="text-xs text-slate-500">Évaluez la probabilité et l'impact de chaque risque et définissez un plan de prévention.</p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => exportRisksPDF(project)}
+                  className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
+                  title="Télécharger le registre des risques en PDF"
+                >
+                  <Download className="w-3.5 h-3.5" /> Télécharger en PDF
+                </button>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1909,6 +2002,14 @@ export default function ProjectDashboard({
                   <h3 className="text-sm font-bold text-slate-800">Gestion et Groupes de Budget</h3>
                   <p className="text-xs text-slate-500">Ventilez les dépenses prévues et réelles par poste de coût et modifiez les lignes.</p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => exportBudgetPDF(project)}
+                  className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
+                  title="Télécharger le budget en PDF"
+                >
+                  <Download className="w-3.5 h-3.5" /> Télécharger en PDF
+                </button>
               </div>
 
               {/* Summary Banner */}
@@ -2087,26 +2188,37 @@ export default function ProjectDashboard({
           {activeTab === 'communication' && (
             <div className="space-y-6">
               {/* Communication Sub-tabs */}
-              <div className="flex border-b border-slate-200 pb-2 gap-4">
+              <div className="flex border-b border-slate-200 pb-2 gap-4 items-center justify-between">
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => setCommSubTab('meetings')}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                      commSubTab === 'meetings'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    Événements & Réunions de Gouvernance
+                  </button>
+                  <button
+                    onClick={() => setCommSubTab('actions')}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                      commSubTab === 'actions'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    Actions de Communication & Rapports
+                  </button>
+                </div>
+
                 <button
-                  onClick={() => setCommSubTab('meetings')}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                    commSubTab === 'meetings'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
+                  type="button"
+                  onClick={() => exportCommunicationPDF(project)}
+                  className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="Télécharger la communication en PDF"
                 >
-                  Événements & Réunions de Gouvernance
-                </button>
-                <button
-                  onClick={() => setCommSubTab('actions')}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                    commSubTab === 'actions'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  Actions de Communication & Rapports
+                  <Download className="w-3.5 h-3.5" /> Télécharger en PDF
                 </button>
               </div>
 
@@ -2354,6 +2466,14 @@ export default function ProjectDashboard({
                   <h3 className="text-sm font-bold text-slate-800">Indicateurs de Performance (KPI)</h3>
                   <p className="text-xs text-slate-500">Configurez les métriques stratégiques et leurs valeurs cibles.</p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => exportKpisPDF(project)}
+                  className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
+                  title="Télécharger les KPI en PDF"
+                >
+                  <Download className="w-3.5 h-3.5" /> Télécharger en PDF
+                </button>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

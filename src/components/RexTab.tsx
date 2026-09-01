@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Project, RexItem } from '../types';
-import { HeartHandshake, Plus, Trash2, Edit3, CheckCircle2, AlertTriangle, Lightbulb } from 'lucide-react';
+import { HeartHandshake, Plus, Trash2, Edit3, CheckCircle2, AlertTriangle, Lightbulb, Download } from 'lucide-react';
+import { exportRexPDF } from '../utils/pdfExport';
 
 interface RexTabProps {
   project: Project;
@@ -80,14 +81,23 @@ export default function RexTab({ project, onUpdateProject, canEdit = true }: Rex
           </p>
         </div>
 
-        {canEdit && (
+        <div className="flex items-center gap-2 self-start sm:self-auto">
           <button
-            onClick={() => setShowAddForm(true)}
-            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors shadow-xs flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+            onClick={() => exportRexPDF(project)}
+            className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            title="Télécharger le REX en PDF"
           >
-            <Plus className="w-4 h-4" /> Ajouter un Constat / REX
+            <Download className="w-4 h-4" /> Télécharger en PDF
           </button>
-        )}
+          {canEdit && (
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Ajouter un Constat / REX
+            </button>
+          )}
+        </div>
       </div>
 
       {rexItems.length === 0 ? (
