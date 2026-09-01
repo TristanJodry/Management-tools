@@ -67,8 +67,13 @@ export const MODULE_LABELS: Record<ModuleKey, { label: string; description: stri
     category: 'Clôture'
   },
   templates: {
-    label: 'Référentiel Commun (Modèles)',
-    description: 'Accès et téléchargement des trames méthodologiques',
+    label: 'Référentiel Commun (Consultation & Téléchargement)',
+    description: 'Accès en consultation et téléchargement des trames méthodologiques',
+    category: 'Ressources'
+  },
+  manage_templates: {
+    label: 'Référentiel Commun (Gestion & Modification)',
+    description: 'Ajout, modification et suppression des modèles dans le référentiel',
     category: 'Ressources'
   }
 };

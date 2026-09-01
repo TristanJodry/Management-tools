@@ -56,6 +56,7 @@ export interface BudgetExpense {
   name: string;
   title?: string;
   quantity?: number;
+  unitPrice?: number;
   unitPricePlanned?: number;
   unitPriceSpent?: number;
   planned: number;
@@ -249,7 +250,8 @@ export type ModuleKey =
   | 'rex'
   | 'documents'
   | 'closure'
-  | 'templates';
+  | 'templates'
+  | 'manage_templates';
 
 export interface UserGroup {
   id: string;

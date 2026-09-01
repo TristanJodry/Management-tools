@@ -81,6 +81,34 @@ function addPdfFooter(doc: jsPDF, project: Project, tabTitle: string) {
   }
 }
 
+// Helpers for date parsing and Gantt rendering
+function parseProjectDate(dateStr?: string): number | null {
+  if (!dateStr) return null;
+  const s = dateStr.trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d.getTime();
+  }
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
+    const parts = s.split('/');
+    const d = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+    return isNaN(d.getTime()) ? null : d.getTime();
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d.getTime();
+}
+
+function formatGanttDate(timestamp: number): string {
+  const d = new Date(timestamp);
+  if (isNaN(d.getTime())) return '';
+  const day = String(d.getDate()).padStart(2, '0');
+  const months = ['JANV.', 'FÉVR.', 'MARS', 'AVR.', 'MAI', 'JUIN', 'JUIL.', 'AOÛT', 'SEPT.', 'OCT.', 'NOV.', 'DÉC.'];
+  const month = months[d.getMonth()] || '';
+  const year = d.getFullYear();
+  return `${day} ${month} ${year}`;
+}
+
 // 1. Export Parties Prenantes PDF
 export function exportStakeholdersPDF(project: Project, globalTeam: TeamMember[] = []) {
   const doc = new jsPDF('p', 'mm', 'a4');
@@ -99,17 +127,28 @@ export function exportStakeholdersPDF(project: Project, globalTeam: TeamMember[]
   const directStakeholders = project.stakeholders || [];
 
   const tableData: string[][] = [];
+  const processedStakeholderIds = new Set<string>();
+  const processedStakeholderNames = new Set<string>();
 
   groups.forEach((grp) => {
     (grp.stakeholders || []).forEach((sh) => {
+      if (sh.id) processedStakeholderIds.add(sh.id);
+      if (sh.name) processedStakeholderNames.add(sh.name.trim().toLowerCase());
       const influenceLabel = sh.influence === 'high' ? 'Élevée' : sh.influence === 'medium' ? 'Moyenne' : 'Faible';
       tableData.push([sh.name || 'N/A', sh.role || 'N/A', grp.name || 'Général', influenceLabel]);
     });
   });
 
+  // Filter direct stakeholders to avoid any duplicate that is already inside a group
   directStakeholders.forEach((sh) => {
-    const influenceLabel = sh.influence === 'high' ? 'Élevée' : sh.influence === 'medium' ? 'Moyenne' : 'Faible';
-    tableData.push([sh.name || 'N/A', sh.role || 'N/A', 'Hors groupe', influenceLabel]);
+    const isDuplicateId = sh.id && processedStakeholderIds.has(sh.id);
+    const isDuplicateName = sh.name && processedStakeholderNames.has(sh.name.trim().toLowerCase());
+    if (!isDuplicateId && !isDuplicateName) {
+      if (sh.id) processedStakeholderIds.add(sh.id);
+      if (sh.name) processedStakeholderNames.add(sh.name.trim().toLowerCase());
+      const influenceLabel = sh.influence === 'high' ? 'Élevée' : sh.influence === 'medium' ? 'Moyenne' : 'Faible';
+      tableData.push([sh.name || 'N/A', sh.role || 'N/A', 'Hors groupe', influenceLabel]);
+    }
   });
 
   if (tableData.length === 0) {
@@ -242,30 +281,263 @@ export function exportDecisionMatrixPDF(project: Project) {
   doc.save(`${project.id || 'projet'}_matrice_decision.pdf`);
 }
 
-// 3. Export Planification & Gantt PDF
+// 3. Export Planification & Diagramme de Gantt PDF
 export function exportPlanificationPDF(project: Project, globalTeam: TeamMember[] = []) {
-  const doc = new jsPDF('l', 'mm', 'a4'); // Landscape for planning
-  addPdfHeader(doc, project, 'Planification & Livrables (Gantt)', 'l');
+  const doc = new jsPDF('l', 'mm', 'a4'); // Landscape A4 (297 x 210 mm)
+  addPdfHeader(doc, project, 'Planification & Diagramme de Gantt', 'l');
 
-  let currentY = 36;
+  let currentY = 35;
   const phases = project.ganttPhases || [];
 
-  // Summary box
+  // 1. Build an ID -> Item Name map for predecessor links
+  const itemMap = new Map<string, string>();
+  phases.forEach((p) => {
+    (p.items || []).forEach((item) => {
+      if (item.id) itemMap.set(item.id, item.name);
+    });
+  });
+
+  // 2. Collect all date boundaries
+  const allTimestamps: number[] = [];
+  const projectStartTs = parseProjectDate(project.startDate);
+  const projectEndTs = parseProjectDate(project.endDate);
+  if (projectStartTs) allTimestamps.push(projectStartTs);
+  if (projectEndTs) allTimestamps.push(projectEndTs);
+
+  let totalTasksCount = 0;
+  let completedTasksCount = 0;
+  let milestonesCount = 0;
+
+  phases.forEach((p) => {
+    (p.items || []).forEach((item) => {
+      if (item.type === 'milestone') {
+        milestonesCount++;
+      } else {
+        totalTasksCount++;
+        if (item.completed || item.progress === 100) completedTasksCount++;
+      }
+      const s = parseProjectDate(item.startDate);
+      const e = parseProjectDate(item.endDate);
+      if (s) allTimestamps.push(s);
+      if (e) allTimestamps.push(e);
+    });
+  });
+
+  let minTs = allTimestamps.length > 0 ? Math.min(...allTimestamps) : Date.now();
+  let maxTs = allTimestamps.length > 0 ? Math.max(...allTimestamps) : Date.now() + 90 * 86400000;
+  if (maxTs <= minTs) {
+    maxTs = minTs + 30 * 86400000;
+  }
+  const totalRange = maxTs - minTs;
+
+  // 3. Summary metrics banner
   doc.setFillColor(241, 245, 249);
-  doc.roundedRect(14, currentY, doc.internal.pageSize.getWidth() - 28, 12, 2, 2, 'F');
-  doc.setFontSize(8.5);
+  doc.roundedRect(14, currentY, 269, 10, 2, 2, 'F');
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(30, 41, 59);
-  doc.text(`Période du projet : du ${project.startDate || 'N/A'} au ${project.endDate || 'N/A'}`, 18, currentY + 7);
-  doc.text(`Tâches réalisées : ${project.tasksCompleted || 0} / ${project.tasksTotal || 0}`, 130, currentY + 7);
-  doc.text(`Indice de retard : ${project.delayLevel === 'high' ? 'Critique' : project.delayLevel === 'medium' ? 'Modéré' : 'Faible / Aucun'}`, 210, currentY + 7);
+  doc.text(`Période globale : du ${formatGanttDate(minTs)} au ${formatGanttDate(maxTs)}`, 18, currentY + 6.2);
+  doc.text(`Avancement : ${completedTasksCount} / ${totalTasksCount} tâches achevées`, 120, currentY + 6.2);
+  doc.text(`Jalons clés : ${milestonesCount} jalons`, 200, currentY + 6.2);
+  doc.text(`Retard : ${project.delayLevel === 'high' ? 'Critique' : project.delayLevel === 'medium' ? 'Modéré' : 'Faible'}`, 245, currentY + 6.2);
 
-  currentY += 18;
+  currentY += 14;
 
-  const tableData: any[] = [];
+  // 4. Gantt Timeline Layout dimensions
+  const leftColWidth = 100;
+  const timelineStartX = 14 + leftColWidth; // 114 mm
+  const timelineWidth = 169; // from 114 to 283 mm
+
+  const drawGanttHeader = (y: number) => {
+    // Dark header bar
+    doc.setFillColor(15, 23, 42); // Slate 900
+    doc.rect(14, y, 269, 8, 'F');
+
+    // Left title
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text('PHASES / LIVRABLES', 18, y + 5.2);
+
+    // Timeline date ticks (5 evenly spaced intervals)
+    doc.setFontSize(6.5);
+    doc.setTextColor(203, 213, 225); // Slate 300
+    for (let i = 0; i <= 4; i++) {
+      const tickTs = minTs + (i / 4) * totalRange;
+      const tickX = timelineStartX + (i / 4) * timelineWidth;
+      const label = formatGanttDate(tickTs);
+
+      // Tick separator
+      if (i > 0 && i < 4) {
+        doc.setDrawColor(51, 65, 85);
+        doc.line(tickX, y, tickX, y + 8);
+      }
+
+      const align = i === 0 ? 'left' : i === 4 ? 'right' : 'center';
+      const textX = i === 0 ? tickX + 2 : i === 4 ? tickX - 2 : tickX;
+      doc.text(label, textX, y + 5.2, { align });
+    }
+  };
+
+  drawGanttHeader(currentY);
+  currentY += 8;
+
+  let rowIndex = 0;
 
   phases.forEach((phase) => {
-    // Phase header row
+    // Check if new page is needed
+    if (currentY + 16 > 192) {
+      addPdfFooter(doc, project, 'Planification & Gantt');
+      doc.addPage();
+      addPdfHeader(doc, project, 'Planification & Diagramme de Gantt (Suite)', 'l');
+      currentY = 35;
+      drawGanttHeader(currentY);
+      currentY += 8;
+    }
+
+    // Draw Phase Bar
+    doc.setFillColor(30, 41, 59); // Slate 800
+    doc.rect(14, currentY, 269, 6.5, 'F');
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(251, 191, 36); // Amber 400
+    doc.text(`📁 ${phase.name.toUpperCase()}`, 18, currentY + 4.5);
+
+    // Subtle vertical divisions on phase row
+    for (let i = 1; i <= 3; i++) {
+      const tickX = timelineStartX + (i / 4) * timelineWidth;
+      doc.setDrawColor(51, 65, 85);
+      doc.line(tickX, currentY, tickX, currentY + 6.5);
+    }
+
+    currentY += 6.5;
+
+    (phase.items || []).forEach((item) => {
+      if (currentY + 10 > 192) {
+        addPdfFooter(doc, project, 'Planification & Gantt');
+        doc.addPage();
+        addPdfHeader(doc, project, 'Planification & Diagramme de Gantt (Suite)', 'l');
+        currentY = 35;
+        drawGanttHeader(currentY);
+        currentY += 8;
+      }
+
+      const isMilestone = item.type === 'milestone';
+      const rowBg = rowIndex % 2 === 0 ? [255, 255, 255] : [248, 250, 252];
+      rowIndex++;
+
+      // Row background
+      doc.setFillColor(rowBg[0], rowBg[1], rowBg[2]);
+      doc.rect(14, currentY, 269, 8.5, 'F');
+
+      // Bottom border line
+      doc.setDrawColor(226, 232, 240);
+      doc.line(14, currentY + 8.5, 283, currentY + 8.5);
+
+      // Vertical timeline grid lines
+      for (let i = 0; i <= 4; i++) {
+        const tickX = timelineStartX + (i / 4) * timelineWidth;
+        doc.setDrawColor(241, 245, 249);
+        doc.line(tickX, currentY, tickX, currentY + 8.5);
+      }
+
+      // Left Column Text & Details
+      const assignedNames = (item.assignedTo || [])
+        .map((id) => {
+          const m = globalTeam.find((tm) => tm.id === id);
+          return m ? `${m.firstName}` : id;
+        })
+        .join(', ');
+
+      const predName = item.predecessorId ? itemMap.get(item.predecessorId) : null;
+
+      if (isMilestone) {
+        // Milestone title
+        doc.setFontSize(7.2);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(180, 83, 9); // Amber 700
+        const truncatedName = item.name.length > 40 ? item.name.substring(0, 38) + '...' : item.name;
+        doc.text(`◆ ${truncatedName}`, 18, currentY + 3.8);
+
+        // Subtitle line
+        doc.setFontSize(6);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139);
+        let subText = assignedNames ? `👤 ${assignedNames}` : '👤 Équipe';
+        if (item.endDate || item.startDate) subText += ` | 📅 ${item.endDate || item.startDate}`;
+        if (predName) subText += ` | 🔗 ${predName.length > 20 ? predName.substring(0, 18) + '..' : predName}`;
+        doc.text(subText, 21, currentY + 7);
+      } else {
+        // Task title
+        doc.setFontSize(7.2);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(15, 23, 42); // Slate 900
+        const truncatedName = item.name.length > 42 ? item.name.substring(0, 40) + '...' : item.name;
+        doc.text(`■ ${truncatedName}`, 18, currentY + 3.8);
+
+        // Duration calculation
+        const iStart = parseProjectDate(item.startDate);
+        const iEnd = parseProjectDate(item.endDate);
+        let durationDays = 0;
+        if (iStart && iEnd && iEnd >= iStart) {
+          durationDays = Math.max(1, Math.round((iEnd - iStart) / (1000 * 60 * 60 * 24)));
+        }
+
+        // Subtitle line
+        doc.setFontSize(6);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139);
+        let subText = assignedNames ? `👤 ${assignedNames}` : '👤 Non assigné';
+        if (durationDays > 0) subText += ` | ⏳ ${durationDays} j.`;
+        if (predName) subText += ` | 🔗 ${predName.length > 18 ? predName.substring(0, 16) + '..' : predName}`;
+        doc.text(subText, 21, currentY + 7);
+      }
+
+      // Right Column: Gantt Bar / Milestone Marker
+      if (isMilestone) {
+        const itemTs = parseProjectDate(item.endDate || item.startDate) ?? minTs;
+        const ratio = Math.max(0, Math.min(1, (itemTs - minTs) / totalRange));
+        const diamondX = timelineStartX + ratio * timelineWidth;
+        const diamondY = currentY + 4.25;
+
+        // Draw diamond icon
+        doc.setFontSize(9);
+        doc.setTextColor(245, 158, 11); // Amber 500
+        doc.text('◆', diamondX, diamondY + 1.2, { align: 'center' });
+      } else {
+        const iStart = parseProjectDate(item.startDate) ?? minTs;
+        const iEnd = parseProjectDate(item.endDate) ?? (iStart + 7 * 86400000);
+        const r1 = Math.max(0, Math.min(1, (iStart - minTs) / totalRange));
+        const r2 = Math.max(0, Math.min(1, (iEnd - minTs) / totalRange));
+        const effectiveR2 = Math.max(r1 + 0.02, r2);
+
+        const barX = timelineStartX + r1 * timelineWidth;
+        const barW = Math.max(8, (effectiveR2 - r1) * timelineWidth);
+        const barY = currentY + 2;
+        const barH = 4.5;
+
+        // Draw Indigo progress bar
+        doc.setFillColor(79, 70, 229); // Indigo 600
+        doc.roundedRect(barX, barY, barW, barH, 1, 1, 'F');
+
+        // Progress label inside bar
+        doc.setFontSize(5.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text(`${item.progress || 0}%`, barX + barW / 2, barY + 3.1, { align: 'center' });
+      }
+
+      currentY += 8.5;
+    });
+  });
+
+  // Detailed reference table on next page
+  doc.addPage();
+  addPdfHeader(doc, project, 'Détail des Livrables & Planning (Tableau)', 'l');
+  let tableY = 36;
+
+  const tableData: any[] = [];
+  phases.forEach((phase) => {
     tableData.push([
       { content: `PHASE : ${phase.name.toUpperCase()}`, colSpan: 7, styles: { fillColor: [224, 231, 255], fontStyle: 'bold', textColor: [49, 46, 129] } }
     ]);
@@ -296,7 +568,7 @@ export function exportPlanificationPDF(project: Project, globalTeam: TeamMember[
   }
 
   autoTable(doc, {
-    startY: currentY,
+    startY: tableY,
     head: [['Tâche / Jalon / Livrable', 'Type', 'Affectation', 'Date Début', 'Date Fin', 'Progression', 'Statut']],
     body: tableData,
     headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 8 },
@@ -495,8 +767,12 @@ export function exportBudgetPDF(project: Project) {
       const planned = exp.planned || 0;
       const spent = exp.spent || 0;
       const diff = planned - spent;
+      const qty = exp.quantity || 1;
+      const uPrice = exp.unitPrice ?? (planned && qty > 0 ? planned / qty : 0);
+      const qtyDetail = uPrice > 0 ? ` (${qty} × ${formatEuro(uPrice)})` : (qty > 1 ? ` (Qté: ${qty})` : '');
+
       tableData.push([
-        `• ${expName}`,
+        `• ${expName}${qtyDetail}`,
         formatEuro(planned),
         formatEuro(spent),
         formatEuro(diff),

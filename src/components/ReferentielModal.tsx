@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { CommonTemplate, UserAccount } from '../types';
+import { CommonTemplate, UserAccount, UserGroup } from '../types';
+import { hasWritePermission } from '../utils/permissions';
 import { BookOpen, Plus, Trash2, Download, Upload, Search, X, FileText, ExternalLink, Filter } from 'lucide-react';
 
 interface ReferentielModalProps {
@@ -8,6 +9,7 @@ interface ReferentielModalProps {
   templates: CommonTemplate[];
   onSaveTemplates: (updated: CommonTemplate[]) => void;
   currentUser?: UserAccount | null;
+  userGroups?: UserGroup[];
 }
 
 export default function ReferentielModal({
@@ -15,7 +17,8 @@ export default function ReferentielModal({
   onClose,
   templates,
   onSaveTemplates,
-  currentUser
+  currentUser,
+  userGroups = []
 }: ReferentielModalProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -32,7 +35,7 @@ export default function ReferentielModal({
 
   if (!isOpen) return null;
 
-  const canEdit = currentUser?.isAdmin || currentUser?.role === 'Administrateur' || currentUser?.role === 'Chef de Projet' || !currentUser;
+  const canEdit = !currentUser || currentUser.isAdmin || hasWritePermission(currentUser, userGroups, 'manage_templates');
 
   const categories = [
     'all',

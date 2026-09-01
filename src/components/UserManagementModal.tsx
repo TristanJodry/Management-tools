@@ -40,7 +40,8 @@ export default function UserManagementModal({
     rex: false,
     documents: false,
     closure: false,
-    templates: false
+    templates: false,
+    manage_templates: false
   });
 
   // State for adding/editing user
@@ -74,7 +75,8 @@ export default function UserManagementModal({
       rex: true,
       documents: true,
       closure: true,
-      templates: true
+      templates: true,
+      manage_templates: true
     };
     setGroupPermissions(defaultPerms);
   };

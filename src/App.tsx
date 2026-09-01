@@ -560,6 +560,7 @@ export default function App() {
         templates={referentielTemplates}
         onSaveTemplates={saveReferentielTemplates}
         currentUser={currentUser}
+        userGroups={userGroups}
       />
 
       {/* USER MANAGEMENT & RBAC MODAL */}

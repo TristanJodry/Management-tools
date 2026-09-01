@@ -590,8 +590,7 @@ export default function ProjectDashboard({
   const [newBudgetGroupTitle, setNewBudgetGroupTitle] = useState('');
   const [expenseTitle, setExpenseTitle] = useState('');
   const [expenseQuantity, setExpenseQuantity] = useState<number | ''>(1);
-  const [expensePlanned, setExpensePlanned] = useState<number | ''>('');
-  const [expenseSpent, setExpenseSpent] = useState<number | ''>('');
+  const [expenseUnitPrice, setExpenseUnitPrice] = useState<number | ''>('');
   const [expenseGroupId, setExpenseGroupId] = useState('');
 
   const [editingBudgetGroup, setEditingBudgetGroup] = useState<BudgetGroup | null>(null);
@@ -632,13 +631,19 @@ export default function ProjectDashboard({
     const targetGroupId = expenseGroupId || (budgetGroups.length > 0 ? budgetGroups[0].id : '');
     if (!targetGroupId || !expenseTitle.trim()) return;
 
+    const qty = Number(expenseQuantity) > 0 ? Number(expenseQuantity) : 1;
+    const uPrice = Number(expenseUnitPrice) >= 0 ? Number(expenseUnitPrice) : 0;
+    const totalCalc = qty * uPrice;
+
     const newE: BudgetExpense = {
       id: `exp-${Date.now()}`,
       name: expenseTitle.trim(),
       title: expenseTitle.trim(),
-      quantity: Number(expenseQuantity) || 1,
-      planned: Number(expensePlanned) || 0,
-      spent: Number(expenseSpent) || 0
+      quantity: qty,
+      unitPrice: uPrice,
+      unitPricePlanned: uPrice,
+      planned: totalCalc,
+      spent: 0
     };
 
     const updated = budgetGroups.map((g) => {
@@ -653,8 +658,7 @@ export default function ProjectDashboard({
 
     setExpenseTitle('');
     setExpenseQuantity(1);
-    setExpensePlanned('');
-    setExpenseSpent('');
+    setExpenseUnitPrice('');
   };
 
   const handleUpdateExpense = (e: React.FormEvent) => {
@@ -2065,51 +2069,54 @@ export default function ProjectDashboard({
                         ))}
                       </select>
 
-                      <input
-                        type="text"
-                        required
-                        placeholder="Intitulé de la dépense"
-                        value={expenseTitle}
-                        onChange={(e) => setExpenseTitle(e.target.value)}
-                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                      />
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Libellé / Dépense</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="ex: Licences logicielles, Serveurs..."
+                          value={expenseTitle}
+                          onChange={(e) => setExpenseTitle(e.target.value)}
+                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                        />
+                      </div>
 
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Qté</label>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Quantité (Unités)</label>
                           <input
                             type="number"
                             min={1}
-                            placeholder="Qté"
+                            placeholder="Qté (ex: 10)"
                             value={expenseQuantity}
                             onChange={(e) => setExpenseQuantity(e.target.value ? Number(e.target.value) : '')}
                             className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Prévu (€)</label>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Prix unitaire (€)</label>
                           <input
                             type="number"
-                            placeholder="Prévu (€)"
-                            value={expensePlanned}
-                            onChange={(e) => setExpensePlanned(e.target.value ? Number(e.target.value) : '')}
-                            className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Réel (€)</label>
-                          <input
-                            type="number"
-                            placeholder="Réel (€)"
-                            value={expenseSpent}
-                            onChange={(e) => setExpenseSpent(e.target.value ? Number(e.target.value) : '')}
+                            min={0}
+                            step="any"
+                            placeholder="Prix unitaire (€)"
+                            value={expenseUnitPrice}
+                            onChange={(e) => setExpenseUnitPrice(e.target.value ? Number(e.target.value) : '')}
                             className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
                           />
                         </div>
                       </div>
 
-                      <button type="submit" className="w-full py-2 bg-indigo-600 text-white font-bold text-xs rounded cursor-pointer">
-                        Ajouter Ligne Dépense
+                      {/* Auto-calculated Total Amount */}
+                      <div className="p-2.5 bg-indigo-50/70 border border-indigo-100 rounded-lg flex items-center justify-between text-xs">
+                        <span className="text-[11px] font-semibold text-indigo-900">Montant Total Calculé :</span>
+                        <span className="font-mono font-bold text-indigo-700 text-sm">
+                          {formatEuro((Number(expenseQuantity) || 1) * (Number(expenseUnitPrice) || 0))}
+                        </span>
+                      </div>
+
+                      <button type="submit" className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded transition-colors cursor-pointer shadow-2xs">
+                        Ajouter la Dépense
                       </button>
                     </form>
                   </div>
@@ -2141,40 +2148,52 @@ export default function ProjectDashboard({
                       </div>
 
                       <div className="space-y-1.5">
-                        {group.expenses.map((exp) => (
-                          <div key={exp.id} className="bg-white p-2.5 rounded-lg border border-slate-200 flex justify-between items-center text-xs">
-                            <span className="font-bold text-slate-800">
-                              {exp.title || exp.name}
-                              {exp.quantity !== undefined && exp.quantity > 0 ? (
-                                <span className="text-[10px] text-slate-500 ml-1.5 font-normal bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                                  Qté: {exp.quantity}
+                        {group.expenses.map((exp) => {
+                          const qty = exp.quantity || 1;
+                          const uPrice = exp.unitPrice ?? (exp.planned ? exp.planned / qty : 0);
+                          return (
+                            <div key={exp.id} className="bg-white p-2.5 rounded-lg border border-slate-200 flex justify-between items-center text-xs">
+                              <div className="space-y-0.5">
+                                <span className="font-bold text-slate-800 block">
+                                  {exp.title || exp.name}
                                 </span>
-                              ) : null}
-                            </span>
-                            <div className="flex items-center gap-3 font-mono font-bold">
-                              <span className="text-slate-600">Prévu: {formatEuro(exp.planned)}</span>
-                              <span className={exp.spent > exp.planned ? 'text-rose-600' : 'text-emerald-600'}>
-                                Réel: {formatEuro(exp.spent)}
-                              </span>
-                              {canEditCurrentModule && (
-                                <>
-                                  <button
-                                    onClick={() => setEditingExpense({ groupId: group.id, expense: { ...exp } })}
-                                    className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"
-                                  >
-                                    <Edit3 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleRemoveExpenseFromGroup(group.id, exp.id)}
-                                    className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </>
-                              )}
+                                <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono">
+                                  <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                    Qté: {qty}
+                                  </span>
+                                  {uPrice > 0 && (
+                                    <span>
+                                      × {formatEuro(uPrice)} / unité
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 font-mono font-bold">
+                                <span className="text-indigo-700 bg-indigo-50 px-2 py-1 rounded border border-indigo-100">
+                                  Total: {formatEuro(exp.planned)}
+                                </span>
+                                {canEditCurrentModule && (
+                                  <>
+                                    <button
+                                      onClick={() => setEditingExpense({ groupId: group.id, expense: { ...exp, quantity: qty, unitPrice: uPrice } })}
+                                      className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"
+                                      title="Modifier"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleRemoveExpenseFromGroup(group.id, exp.id)}
+                                      className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                                      title="Supprimer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
@@ -2852,44 +2871,58 @@ export default function ProjectDashboard({
               })}
               className="w-full text-xs px-3 py-2 border border-slate-300 rounded bg-white"
             />
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Qté</label>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Qté (Unités)</label>
                 <input
                   type="number"
                   min={1}
                   value={editingExpense.expense.quantity ?? 1}
-                  onChange={(e) => setEditingExpense({
-                    ...editingExpense,
-                    expense: { ...editingExpense.expense, quantity: Number(e.target.value) || 1 }
-                  })}
+                  onChange={(e) => {
+                    const q = Number(e.target.value) || 1;
+                    const u = editingExpense.expense.unitPrice ?? (editingExpense.expense.planned / (editingExpense.expense.quantity || 1));
+                    setEditingExpense({
+                      ...editingExpense,
+                      expense: {
+                        ...editingExpense.expense,
+                        quantity: q,
+                        unitPrice: u,
+                        planned: q * u
+                      }
+                    });
+                  }}
                   className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Prévu (€)</label>
+                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Prix unitaire (€)</label>
                 <input
                   type="number"
-                  value={editingExpense.expense.planned}
-                  onChange={(e) => setEditingExpense({
-                    ...editingExpense,
-                    expense: { ...editingExpense.expense, planned: Number(e.target.value) }
-                  })}
+                  min={0}
+                  step="any"
+                  value={editingExpense.expense.unitPrice ?? (editingExpense.expense.planned / (editingExpense.expense.quantity || 1))}
+                  onChange={(e) => {
+                    const u = Number(e.target.value) || 0;
+                    const q = editingExpense.expense.quantity || 1;
+                    setEditingExpense({
+                      ...editingExpense,
+                      expense: {
+                        ...editingExpense.expense,
+                        unitPrice: u,
+                        planned: q * u
+                      }
+                    });
+                  }}
                   className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
                 />
               </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Réel (€)</label>
-                <input
-                  type="number"
-                  value={editingExpense.expense.spent}
-                  onChange={(e) => setEditingExpense({
-                    ...editingExpense,
-                    expense: { ...editingExpense.expense, spent: Number(e.target.value) }
-                  })}
-                  className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
-                />
-              </div>
+            </div>
+
+            <div className="p-2.5 bg-indigo-50 border border-indigo-100 rounded-lg flex items-center justify-between text-xs">
+              <span className="text-[11px] font-semibold text-indigo-900">Total Calculé :</span>
+              <span className="font-mono font-bold text-indigo-700 text-sm">
+                {formatEuro(editingExpense.expense.planned)}
+              </span>
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setEditingExpense(null)} className="px-3 py-1.5 text-xs font-bold text-slate-600">
