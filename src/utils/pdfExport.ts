@@ -336,10 +336,10 @@ export function exportPlanificationPDF(project: Project, globalTeam: TeamMember[
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(30, 41, 59);
-  doc.text(`Période globale : du ${formatGanttDate(minTs)} au ${formatGanttDate(maxTs)}`, 18, currentY + 6.2);
-  doc.text(`Avancement : ${completedTasksCount} / ${totalTasksCount} tâches achevées`, 120, currentY + 6.2);
-  doc.text(`Jalons clés : ${milestonesCount} jalons`, 200, currentY + 6.2);
-  doc.text(`Retard : ${project.delayLevel === 'high' ? 'Critique' : project.delayLevel === 'medium' ? 'Modéré' : 'Faible'}`, 245, currentY + 6.2);
+  doc.text(`Periode globale : du ${formatGanttDate(minTs)} au ${formatGanttDate(maxTs)}`, 18, currentY + 6.2);
+  doc.text(`Avancement : ${completedTasksCount} / ${totalTasksCount} taches achevees`, 120, currentY + 6.2);
+  doc.text(`Jalons cles : ${milestonesCount} jalons`, 200, currentY + 6.2);
+  doc.text(`Retard : ${project.delayLevel === 'high' ? 'Critique' : project.delayLevel === 'medium' ? 'Modere' : 'Faible'}`, 245, currentY + 6.2);
 
   currentY += 14;
 
@@ -359,7 +359,7 @@ export function exportPlanificationPDF(project: Project, globalTeam: TeamMember[
     doc.setTextColor(255, 255, 255);
     doc.text('PHASES / LIVRABLES', 18, y + 5.2);
 
-    // Timeline date ticks (5 evenly spaced intervals)
+    // Timeline date ticks (5 intervals)
     doc.setFontSize(6.5);
     doc.setTextColor(203, 213, 225); // Slate 300
     for (let i = 0; i <= 4; i++) {
@@ -398,10 +398,20 @@ export function exportPlanificationPDF(project: Project, globalTeam: TeamMember[
     // Draw Phase Bar
     doc.setFillColor(30, 41, 59); // Slate 800
     doc.rect(14, currentY, 269, 6.5, 'F');
+
+    // Vector Phase Badge
+    doc.setFillColor(245, 158, 11);
+    doc.roundedRect(18, currentY + 1.6, 12, 3.3, 0.6, 0.6, 'F');
+    doc.setFontSize(5.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text('PHASE', 24, currentY + 3.9, { align: 'center' });
+
+    // Phase Title Text
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(251, 191, 36); // Amber 400
-    doc.text(`📁 ${phase.name.toUpperCase()}`, 18, currentY + 4.5);
+    doc.text(phase.name.toUpperCase(), 33, currentY + 4.5);
 
     // Subtle vertical divisions on phase row
     for (let i = 1; i <= 3; i++) {
@@ -452,28 +462,41 @@ export function exportPlanificationPDF(project: Project, globalTeam: TeamMember[
       const predName = item.predecessorId ? itemMap.get(item.predecessorId) : null;
 
       if (isMilestone) {
+        // Vector Diamond marker in item title column
+        const mx = 19.2;
+        const my = currentY + 3.2;
+        const mr = 1.3;
+        doc.setFillColor(245, 158, 11);
+        doc.triangle(mx, my - mr, mx + mr, my, mx - mr, my, 'F');
+        doc.triangle(mx, my + mr, mx + mr, my, mx - mr, my, 'F');
+
         // Milestone title
         doc.setFontSize(7.2);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(180, 83, 9); // Amber 700
         const truncatedName = item.name.length > 40 ? item.name.substring(0, 38) + '...' : item.name;
-        doc.text(`◆ ${truncatedName}`, 18, currentY + 3.8);
+        doc.text(truncatedName, 22.5, currentY + 3.8);
 
-        // Subtitle line
+        // Subtitle line (ASCII safe)
         doc.setFontSize(6);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(100, 116, 139);
-        let subText = assignedNames ? `👤 ${assignedNames}` : '👤 Équipe';
-        if (item.endDate || item.startDate) subText += ` | 📅 ${item.endDate || item.startDate}`;
-        if (predName) subText += ` | 🔗 ${predName.length > 20 ? predName.substring(0, 18) + '..' : predName}`;
-        doc.text(subText, 21, currentY + 7);
+        const subParts: string[] = [];
+        subParts.push(assignedNames ? `Resp: ${assignedNames}` : 'Equipe');
+        if (item.endDate || item.startDate) subParts.push(`Echeance: ${item.endDate || item.startDate}`);
+        if (predName) subParts.push(`Dep: ${predName.length > 20 ? predName.substring(0, 18) + '..' : predName}`);
+        doc.text(subParts.join('  |  '), 22.5, currentY + 7);
       } else {
+        // Vector square marker in item title column
+        doc.setFillColor(79, 70, 229);
+        doc.roundedRect(18.2, currentY + 2.2, 2.2, 2.2, 0.4, 0.4, 'F');
+
         // Task title
         doc.setFontSize(7.2);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(15, 23, 42); // Slate 900
         const truncatedName = item.name.length > 42 ? item.name.substring(0, 40) + '...' : item.name;
-        doc.text(`■ ${truncatedName}`, 18, currentY + 3.8);
+        doc.text(truncatedName, 22.5, currentY + 3.8);
 
         // Duration calculation
         const iStart = parseProjectDate(item.startDate);
@@ -483,14 +506,15 @@ export function exportPlanificationPDF(project: Project, globalTeam: TeamMember[
           durationDays = Math.max(1, Math.round((iEnd - iStart) / (1000 * 60 * 60 * 24)));
         }
 
-        // Subtitle line
+        // Subtitle line (ASCII safe)
         doc.setFontSize(6);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(100, 116, 139);
-        let subText = assignedNames ? `👤 ${assignedNames}` : '👤 Non assigné';
-        if (durationDays > 0) subText += ` | ⏳ ${durationDays} j.`;
-        if (predName) subText += ` | 🔗 ${predName.length > 18 ? predName.substring(0, 16) + '..' : predName}`;
-        doc.text(subText, 21, currentY + 7);
+        const subParts: string[] = [];
+        subParts.push(assignedNames ? `Resp: ${assignedNames}` : 'Non assigne');
+        if (durationDays > 0) subParts.push(`Duree: ${durationDays} j.`);
+        if (predName) subParts.push(`Dep: ${predName.length > 18 ? predName.substring(0, 16) + '..' : predName}`);
+        doc.text(subParts.join('  |  '), 22.5, currentY + 7);
       }
 
       // Right Column: Gantt Bar / Milestone Marker
@@ -499,11 +523,12 @@ export function exportPlanificationPDF(project: Project, globalTeam: TeamMember[
         const ratio = Math.max(0, Math.min(1, (itemTs - minTs) / totalRange));
         const diamondX = timelineStartX + ratio * timelineWidth;
         const diamondY = currentY + 4.25;
+        const diamondR = 2.4;
 
-        // Draw diamond icon
-        doc.setFontSize(9);
-        doc.setTextColor(245, 158, 11); // Amber 500
-        doc.text('◆', diamondX, diamondY + 1.2, { align: 'center' });
+        // Draw crisp vector diamond with two triangles
+        doc.setFillColor(245, 158, 11); // Amber 500
+        doc.triangle(diamondX, diamondY - diamondR, diamondX + diamondR, diamondY, diamondX - diamondR, diamondY, 'F');
+        doc.triangle(diamondX, diamondY + diamondR, diamondX + diamondR, diamondY, diamondX - diamondR, diamondY, 'F');
       } else {
         const iStart = parseProjectDate(item.startDate) ?? minTs;
         const iEnd = parseProjectDate(item.endDate) ?? (iStart + 7 * 86400000);

@@ -876,35 +876,6 @@ export default function ProjectDashboard({
     return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(val);
   };
 
-  const getPdfButtonInfo = () => {
-    switch (activeTab) {
-      case 'stakeholders':
-        return { label: 'Télécharger Parties Prenantes en PDF', fn: () => exportStakeholdersPDF(project, globalTeam) };
-      case 'decisionMatrix':
-        return { label: 'Télécharger Matrice de Décision en PDF', fn: () => exportDecisionMatrixPDF(project) };
-      case 'planification':
-        return { label: 'Télécharger Diagramme de Gantt en PDF', fn: () => exportPlanificationPDF(project, globalTeam) };
-      case 'organisation':
-        return { label: 'Télécharger Matrice RACI en PDF', fn: () => exportRaciPDF(project, globalTeam) };
-      case 'risks':
-        return { label: 'Télécharger Matrice des Risques en PDF', fn: () => exportRisksPDF(project) };
-      case 'budget':
-        return { label: 'Télécharger Budget en PDF', fn: () => exportBudgetPDF(project) };
-      case 'communication':
-        return { label: 'Télécharger Communication & Gouvernance en PDF', fn: () => exportCommunicationPDF(project) };
-      case 'kpis':
-        return { label: 'Télécharger Tableau de Bord KPI en PDF', fn: () => exportKpisPDF(project) };
-      case 'close':
-        return { label: 'Télécharger PV de Clôture en PDF', fn: () => exportClosurePDF(project) };
-      case 'rex':
-        return { label: 'Télécharger Bilan REX en PDF', fn: () => exportRexPDF(project) };
-      default:
-        return null;
-    }
-  };
-
-  const currentPdfInfo = getPdfButtonInfo();
-
   return (
     <div className="space-y-6">
       
@@ -1142,17 +1113,6 @@ export default function ProjectDashboard({
               );
             })}
           </div>
-
-          {currentPdfInfo && (
-            <button
-              onClick={currentPdfInfo.fn}
-              className="my-2 mr-4 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs shrink-0"
-              title={currentPdfInfo.label}
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>{currentPdfInfo.label}</span>
-            </button>
-          )}
         </div>
 
         {/* Tab content area */}
