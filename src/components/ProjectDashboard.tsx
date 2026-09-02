@@ -69,7 +69,8 @@ import {
   exportCommunicationPDF,
   exportKpisPDF,
   exportClosurePDF,
-  exportRexPDF
+  exportRexPDF,
+  exportExecutiveSummaryPDF
 } from '../utils/pdfExport';
 
 import TeamCharterTab from './TeamCharterTab';
@@ -80,6 +81,7 @@ import RexTab from './RexTab';
 import DocumentsTab from './DocumentsTab';
 import { GanttChartVisualizer } from './GanttChartVisualizer';
 import { RiskMatrixVisualizer } from './RiskMatrixVisualizer';
+import KanbanBoard from './KanbanBoard';
 
 interface ProjectDashboardProps {
   project: Project;
@@ -107,8 +109,28 @@ export default function ProjectDashboard({
   // Sub-tabs for Stakeholders
   const [stakeholderSubTab, setStakeholderSubTab] = useState<'list' | 'charter'>('list');
 
-  // Sub-tabs for Planification
-  const [planificationSubTab, setPlanificationSubTab] = useState<'gantt' | 'workload'>('gantt');
+  // Sub-tabs for Planification (Gantt, Kanban, Workload)
+  const [planificationSubTab, setPlanificationSubTab] = useState<'gantt' | 'kanban' | 'workload'>('gantt');
+
+  // Confirmation Modal state for secure deletions
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  const requestConfirmation = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmModal(null);
+      }
+    });
+  };
 
   // Permission check for active tab / module
   const getActiveModuleKey = (): ModuleKey => {
@@ -361,9 +383,16 @@ export default function ProjectDashboard({
   };
 
   const handleRemovePhase = (phaseId: string) => {
-    const updated = ganttPhases.filter((p) => p.id !== phaseId);
-    setGanttPhases(updated);
-    updateProjectData({ ganttPhases: updated });
+    const targetPhase = ganttPhases.find((p) => p.id === phaseId);
+    requestConfirmation(
+      'Supprimer cette phase ?',
+      `Êtes-vous certain de vouloir supprimer la phase "${targetPhase?.name || ''}" ainsi que toutes ses tâches et jalons ?`,
+      () => {
+        const updated = ganttPhases.filter((p) => p.id !== phaseId);
+        setGanttPhases(updated);
+        updateProjectData({ ganttPhases: updated });
+      }
+    );
   };
 
   const handleAddItemToPhase = (phaseId: string) => {
@@ -579,9 +608,16 @@ export default function ProjectDashboard({
   };
 
   const handleRemoveRisk = (id: string) => {
-    const updated = risks.filter((r) => r.id !== id);
-    setRisks(updated);
-    updateProjectData({ risksRegister: updated });
+    const targetRisk = risks.find((r) => r.id === id);
+    requestConfirmation(
+      'Supprimer ce risque ?',
+      `Êtes-vous certain de vouloir supprimer le risque "${targetRisk?.desc || ''}" du registre ?`,
+      () => {
+        const updated = risks.filter((r) => r.id !== id);
+        setRisks(updated);
+        updateProjectData({ risksRegister: updated });
+      }
+    );
   };
 
   // ==========================================
@@ -589,8 +625,8 @@ export default function ProjectDashboard({
   // ==========================================
   const [newBudgetGroupTitle, setNewBudgetGroupTitle] = useState('');
   const [expenseTitle, setExpenseTitle] = useState('');
-  const [expenseQuantity, setExpenseQuantity] = useState<number | ''>(1);
-  const [expenseUnitPrice, setExpenseUnitPrice] = useState<number | ''>('');
+  const [expenseQuantity, setExpenseQuantity] = useState<number | string>(1);
+  const [expenseUnitPrice, setExpenseUnitPrice] = useState<number | string>('');
   const [expenseGroupId, setExpenseGroupId] = useState('');
 
   const [editingBudgetGroup, setEditingBudgetGroup] = useState<BudgetGroup | null>(null);
@@ -621,9 +657,16 @@ export default function ProjectDashboard({
   };
 
   const handleRemoveBudgetGroup = (groupId: string) => {
-    const updated = budgetGroups.filter((g) => g.id !== groupId);
-    setBudgetGroups(updated);
-    updateProjectData({ budgetGroups: updated });
+    const targetGroup = budgetGroups.find((g) => g.id === groupId);
+    requestConfirmation(
+      'Supprimer ce poste budgétaire ?',
+      `Êtes-vous certain de vouloir supprimer le poste "${targetGroup?.title || ''}" ainsi que toutes ses lignes de dépense associées ?`,
+      () => {
+        const updated = budgetGroups.filter((g) => g.id !== groupId);
+        setBudgetGroups(updated);
+        updateProjectData({ budgetGroups: updated });
+      }
+    );
   };
 
   const handleAddExpenseToGroup = (e: React.FormEvent) => {
@@ -631,8 +674,11 @@ export default function ProjectDashboard({
     const targetGroupId = expenseGroupId || (budgetGroups.length > 0 ? budgetGroups[0].id : '');
     if (!targetGroupId || !expenseTitle.trim()) return;
 
-    const qty = Number(expenseQuantity) > 0 ? Number(expenseQuantity) : 1;
-    const uPrice = Number(expenseUnitPrice) >= 0 ? Number(expenseUnitPrice) : 0;
+    const parsedQty = parseFloat(String(expenseQuantity).replace(',', '.'));
+    const qty = !isNaN(parsedQty) && parsedQty > 0 ? parsedQty : 1;
+
+    const parsedPrice = parseFloat(String(expenseUnitPrice).replace(',', '.'));
+    const uPrice = !isNaN(parsedPrice) && parsedPrice >= 0 ? parsedPrice : 0;
     const totalCalc = qty * uPrice;
 
     const newE: BudgetExpense = {
@@ -931,6 +977,18 @@ export default function ProjectDashboard({
               )}
             </div>
             <p className="text-xs text-slate-500 max-w-2xl">{project.description}</p>
+          </div>
+
+          <div className="flex items-center gap-2 self-start md:self-center shrink-0">
+            <button
+              type="button"
+              onClick={() => exportExecutiveSummaryPDF(project, globalTeam)}
+              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-2 cursor-pointer shadow-xs hover:shadow-md active:scale-98"
+              title="Générer et télécharger le rapport de synthèse exécutive (One-Pager CoDir) en PDF"
+            >
+              <FileCheck className="w-4 h-4" />
+              <span>Synthèse Exécutive (PDF)</span>
+            </button>
           </div>
         </div>
 
@@ -1384,16 +1442,28 @@ export default function ProjectDashboard({
             <div className="space-y-6">
               {/* Planification Sub-tabs */}
               <div className="flex border-b border-slate-200 pb-2 gap-4 items-center justify-between">
-                <div className="flex gap-4">
+                <div className="flex flex-wrap gap-2 sm:gap-4">
                   <button
                     onClick={() => setPlanificationSubTab('gantt')}
-                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
                       planificationSubTab === 'gantt'
                         ? 'bg-indigo-600 text-white shadow-xs'
                         : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                     }`}
                   >
+                    <Layers className="w-3.5 h-3.5" />
                     Planning & Gantt
+                  </button>
+                  <button
+                    onClick={() => setPlanificationSubTab('kanban')}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                      planificationSubTab === 'kanban'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Sliders className="w-3.5 h-3.5" />
+                    Tableau Kanban
                   </button>
                   <button
                     onClick={() => setPlanificationSubTab('workload')}
@@ -1420,6 +1490,15 @@ export default function ProjectDashboard({
 
               {planificationSubTab === 'workload' ? (
                 <WorkloadTab project={project} globalTeam={globalTeam} onUpdateProject={updateProjectData} canEdit={canEditCurrentModule} />
+              ) : planificationSubTab === 'kanban' ? (
+                <KanbanBoard
+                  phases={ganttPhases}
+                  teamMembers={globalTeam}
+                  canEdit={canEditCurrentModule}
+                  onUpdateTaskProgress={handleUpdateTaskProgress}
+                  onToggleMilestone={handleToggleMilestone}
+                  onDeleteTask={handleRemoveGanttItem}
+                />
               ) : (
                 <div className="space-y-6">
                   {/* Interactive Gantt Visualizer */}
@@ -2893,6 +2972,41 @@ export default function ProjectDashboard({
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* CONFIRMATION MODAL */}
+      {confirmModal && confirmModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-slate-200/80 dark:border-slate-800 text-center space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="mx-auto w-12 h-12 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 rounded-full flex items-center justify-center text-rose-600 dark:text-rose-400">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-bold text-slate-950 dark:text-slate-100 font-display text-sm">
+                {confirmModal.title}
+              </h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal">
+                {confirmModal.message}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmModal(null)}
+                className="py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={confirmModal.onConfirm}
+                className="py-2 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold rounded-xl text-xs transition-colors shadow-xs cursor-pointer"
+              >
+                Confirmer
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

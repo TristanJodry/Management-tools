@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserAccount } from '../types';
 import { Lock, User, Key, AlertCircle, LogIn } from 'lucide-react';
+import TimeEatsLogo from './TimeEatsLogo';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -99,13 +100,13 @@ export default function LoginModal({
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 w-full max-w-md shadow-2xl overflow-hidden">
         
         {/* Header */}
-        <div className="p-6 bg-slate-900 text-white text-center space-y-2 relative">
-          <div className="mx-auto w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-inner">
-            <Lock className="w-6 h-6" />
+        <div className="p-6 bg-slate-900 text-white text-center space-y-3 relative">
+          <div className="flex justify-center">
+            <TimeEatsLogo variant="badge" size="lg" className="bg-white" />
           </div>
           <div>
             <h3 className="text-base font-bold font-display">Connexion à la Plateforme</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Identifiez-vous pour accéder à vos droits d'accès</p>
+            <p className="text-xs text-slate-400 mt-0.5">Identifiez-vous pour accéder à vos projets et droits d'accès</p>
           </div>
         </div>
 

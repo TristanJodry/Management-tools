@@ -36,11 +36,11 @@ function addPdfHeader(
 
   // Title & Subtitle
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(14);
+  doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
-  doc.text(`PROJET : ${project.name.toUpperCase()}`, 14, 12);
+  doc.text(`Time’EATS • PROJET : ${project.name.toUpperCase()}`, 14, 12);
 
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(224, 231, 255); // Indigo 100
   doc.text(
@@ -1117,3 +1117,257 @@ export function exportRexPDF(project: Project) {
   addPdfFooter(doc, project, 'Retour d\'Expérience (REX)');
   doc.save(`${project.id || 'projet'}_REX.pdf`);
 }
+
+// 11. Export Synthèse Exécutive (One-Pager CoDir)
+export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMember[] = []) {
+  const doc = new jsPDF('p', 'mm', 'a4');
+  addPdfHeader(doc, project, 'Synthèse Exécutive & Revue de Direction', 'p');
+
+  let currentY = 35;
+  const pageWidth = doc.internal.pageSize.getWidth(); // 210 mm
+  const contentWidth = pageWidth - 28; // 182 mm
+
+  // Helper for team member name
+  const getMemberName = (id?: string) => {
+    if (!id) return 'Non assigné';
+    const m = globalTeam.find(t => t.id === id);
+    return m ? `${m.firstName} ${m.lastName || ''}`.trim() : id;
+  };
+
+  // 1. KPI & Baromètre Banner
+  const totalBudget = project.budget || 0;
+  const spentBudget = project.spentBudget || 0;
+  const budgetRatio = totalBudget > 0 ? Math.round((spentBudget / totalBudget) * 100) : 0;
+  const progressPercent = project.tasksTotal > 0 ? Math.round((project.tasksCompleted / project.tasksTotal) * 100) : 0;
+
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(203, 213, 225);
+  doc.roundedRect(14, currentY, contentWidth, 22, 2, 2, 'FD');
+
+  // Weather indicator box based on project status
+  const weatherLabel = project.status === 'active' ? 'Beau Fixe' : project.status === 'delayed' ? 'Mitigé' : project.status === 'problem' ? 'Alerte / Bloqué' : 'Projet Clos';
+  const weatherBg = project.status === 'active' ? [220, 252, 231] : project.status === 'delayed' ? [254, 240, 138] : project.status === 'problem' ? [254, 226, 226] : [241, 245, 249];
+  const weatherTextCol = project.status === 'active' ? [22, 101, 52] : project.status === 'delayed' ? [133, 77, 14] : project.status === 'problem' ? [153, 27, 27] : [71, 85, 105];
+
+  doc.setFillColor(weatherBg[0], weatherBg[1], weatherBg[2]);
+  doc.roundedRect(18, currentY + 3.5, 36, 15, 1.5, 1.5, 'F');
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(weatherTextCol[0], weatherTextCol[1], weatherTextCol[2]);
+  doc.text('METEO DU PROJET', 36, currentY + 8, { align: 'center' });
+  doc.setFontSize(8.5);
+  doc.text(weatherLabel, 36, currentY + 14, { align: 'center' });
+
+  // 4 metrics columns
+  const colW = (contentWidth - 44) / 4;
+  const startColsX = 58;
+
+  // Metric 1: Progression
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text('PROGRESSION GLOBALE', startColsX + colW * 0, currentY + 8);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(67, 56, 202);
+  doc.text(`${progressPercent}%`, startColsX + colW * 0, currentY + 15);
+
+  // Metric 2: Planning
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text('TACHES REALISEES', startColsX + colW * 1, currentY + 8);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 41, 59);
+  doc.text(`${project.tasksCompleted || 0} / ${project.tasksTotal || 0}`, startColsX + colW * 1, currentY + 15);
+
+  // Metric 3: Budget
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text('BUDGET CONSOMME', startColsX + colW * 2, currentY + 8);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(spentBudget > totalBudget && totalBudget > 0 ? 220 : 30, spentBudget > totalBudget && totalBudget > 0 ? 38 : 41, spentBudget > totalBudget && totalBudget > 0 ? 38 : 59);
+  doc.text(`${formatEuro(spentBudget)} (${budgetRatio}%)`, startColsX + colW * 2, currentY + 15);
+
+  // Metric 4: Echeance
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text('FIN PREVUE', startColsX + colW * 3, currentY + 8);
+  doc.setFontSize(9.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 41, 59);
+  doc.text(project.endDate || 'N/A', startColsX + colW * 3, currentY + 15);
+
+  currentY += 27;
+
+  // 2. Section: Cadrage & Description
+  doc.setFillColor(30, 41, 59);
+  doc.rect(14, currentY, contentWidth, 6, 'F');
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(255, 255, 255);
+  doc.text('1. CADRAGE & OBJECTIFS STRATEGIQUES', 18, currentY + 4.2);
+
+  currentY += 8;
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(51, 65, 85);
+  const descText = project.description || 'Aucune description spécifique renseignée pour ce projet.';
+  const splitDesc = doc.splitTextToSize(descText, contentWidth - 8);
+  doc.text(splitDesc, 18, currentY + 2);
+  currentY += Math.max(12, splitDesc.length * 4.5 + 4);
+
+  // 3. Section: Prochains Jalons & Livrables Clés
+  doc.setFillColor(30, 41, 59);
+  doc.rect(14, currentY, contentWidth, 6, 'F');
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(255, 255, 255);
+  doc.text('2. PROCHAINS JALONS & ETAPES MAJEURES', 18, currentY + 4.2);
+
+  currentY += 8;
+
+  // Collect key milestones and items
+  const milestones: any[] = [];
+  (project.ganttPhases || []).forEach(phase => {
+    (phase.items || []).forEach(item => {
+      if (item.type === 'milestone' || (item.progress && item.progress < 100)) {
+        milestones.push({
+          phase: phase.name,
+          name: item.name,
+          type: item.type === 'milestone' ? 'Jalon' : 'Livrable',
+          date: item.endDate || item.startDate || 'N/A',
+          progress: `${item.progress || 0}%`,
+          status: item.completed ? 'Achevé' : (item.progress && item.progress > 0 ? 'En cours' : 'À faire')
+        });
+      }
+    });
+  });
+
+  const milestoneTableData = milestones.slice(0, 5).map(m => [
+    m.name,
+    m.phase,
+    m.type,
+    m.date,
+    m.progress,
+    m.status
+  ]);
+
+  if (milestoneTableData.length === 0) {
+    milestoneTableData.push(['Aucun jalon ou tâche configurée', '-', '-', '-', '-', '-']);
+  }
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['Jalon / Livrable', 'Phase', 'Type', 'Échéance', 'Progression', 'Statut']],
+    body: milestoneTableData,
+    headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    styles: { fontSize: 7.5, cellPadding: 2.5 },
+    columnStyles: {
+      0: { cellWidth: 55, fontStyle: 'bold' },
+      1: { cellWidth: 40 },
+      2: { cellWidth: 20 },
+      3: { cellWidth: 25 },
+      4: { cellWidth: 20, halign: 'center' },
+      5: { cellWidth: 22, halign: 'center' }
+    },
+    margin: { left: 14, right: 14 }
+  });
+
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+
+  // 4. Section: Top Risques & Points d'Attention
+  doc.setFillColor(30, 41, 59);
+  doc.rect(14, currentY, contentWidth, 6, 'F');
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(255, 255, 255);
+  doc.text('3. RISQUES MAJEURS & ACTIONS DE MITIGATION', 18, currentY + 4.2);
+
+  currentY += 8;
+
+  const rawRisks = project.risks || project.risksRegister || [];
+  const risks = rawRisks.slice(0, 4).map(r => {
+    const prob = r.prob || 1;
+    const impact = r.impact || 1;
+    const gravScore = prob * impact;
+    const gravLabel = gravScore >= 15 ? 'Critique' : gravScore >= 8 ? 'Modéré' : 'Faible';
+    return [
+      r.desc || 'Risque non spécifié',
+      `P:${prob} / I:${impact}`,
+      gravLabel,
+      r.mitigation || 'Surveillance continue',
+      r.owner ? getMemberName(r.owner) : 'Équipe'
+    ];
+  });
+
+  if (risks.length === 0) {
+    risks.push(['Aucun risque identifié ou enregistré', '-', '-', 'Conformité assurée', '-']);
+  }
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['Risque identifié', 'Catégorie', 'Gravité', 'Plan de mitigation / Action', 'Pilote']],
+    body: risks,
+    headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+    alternateRowStyles: { fillColor: [254, 242, 242] },
+    styles: { fontSize: 7.5, cellPadding: 2.5 },
+    columnStyles: {
+      0: { cellWidth: 50, fontStyle: 'bold' },
+      1: { cellWidth: 25 },
+      2: { cellWidth: 20, halign: 'center' },
+      3: { cellWidth: 60 },
+      4: { cellWidth: 27 }
+    },
+    margin: { left: 14, right: 14 }
+  });
+
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+
+  // 5. Section: Synthèse Budgétaire & Engagement Financier
+  if (currentY + 28 > 275) {
+    addPdfFooter(doc, project, 'Synthèse Exécutive');
+    doc.addPage();
+    addPdfHeader(doc, project, 'Synthèse Exécutive (Suite)', 'p');
+    currentY = 35;
+  }
+
+  doc.setFillColor(30, 41, 59);
+  doc.rect(14, currentY, contentWidth, 6, 'F');
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(255, 255, 255);
+  doc.text('4. SYNTHESE BUDGETAIRE & RESSOURCES', 18, currentY + 4.2);
+
+  currentY += 8;
+
+  const remainingBudget = totalBudget - spentBudget;
+  const budgetTableData = [
+    [
+      formatEuro(totalBudget),
+      formatEuro(spentBudget),
+      formatEuro(remainingBudget),
+      totalBudget > 0 ? `${budgetRatio}%` : 'N/A',
+      remainingBudget < 0 ? 'Dépassement Budgétaire' : 'Sous contrôle'
+    ]
+  ];
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['Budget Alloué (Prévu)', 'Budget Engagé (Réalisé)', 'Solde Restant', 'Consommation', 'Statut Financier']],
+    body: budgetTableData,
+    headStyles: { fillColor: [15, 118, 110], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+    styles: { fontSize: 8, cellPadding: 3, halign: 'center' },
+    margin: { left: 14, right: 14 }
+  });
+
+  addPdfFooter(doc, project, 'Synthèse Exécutive (One-Pager)');
+  doc.save(`${project.id || 'projet'}_Synthese_Executive.pdf`);
+}
+

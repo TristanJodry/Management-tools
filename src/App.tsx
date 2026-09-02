@@ -16,6 +16,7 @@ import UserManagementModal from './components/UserManagementModal';
 import LoginModal from './components/LoginModal';
 import UserProfileModal from './components/UserProfileModal';
 import ReferentielModal from './components/ReferentielModal';
+import TimeEatsLogo from './components/TimeEatsLogo';
 import { 
   FolderKanban, 
   Plus, 
@@ -352,28 +353,33 @@ export default function App() {
           
           {/* Logo & Platform Name */}
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-600 rounded-xl shadow-inner text-white">
-              <FolderKanban className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold tracking-tight font-display text-white">
+            <button
+              type="button"
+              onClick={() => setSelectedProjectId(null)}
+              className="text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400 rounded-xl shrink-0"
+              title="Accueil Time’EATS"
+            >
+              <TimeEatsLogo variant="vertical" size="sm" />
+            </button>
+            <div className="hidden sm:block border-l border-slate-700/80 pl-3">
+              <h1 className="text-sm font-bold tracking-tight font-display text-white">
                 Gouvernance & Gestion de Projets
               </h1>
               <p className="text-[11px] text-slate-400 font-medium">
-                Plateforme de pilotage, arbitrage & suivi de projet
+                Plateforme de pilotage, arbitrage & suivi des projets
               </p>
             </div>
           </div>
 
           {/* Quick Access Actions & Auth Profile */}
-          <div className="flex flex-wrap items-center justify-center md:justify-end gap-2.5">
+          <div className="flex flex-wrap items-center justify-center md:justify-end gap-2">
             
             {/* User Account / Auth Area */}
             {!currentUser ? (
               <button
                 type="button"
                 onClick={() => setIsLoginModalOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-sm transition-all cursor-pointer"
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 rounded-xl shadow-sm transition-all cursor-pointer"
               >
                 <LogIn className="w-4 h-4" />
                 Connexion
@@ -382,16 +388,16 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setIsProfileModalOpen(true)}
-                className="flex items-center gap-2.5 px-3 py-1.5 bg-slate-800/90 hover:bg-slate-750 rounded-xl border border-slate-700/80 transition-all cursor-pointer text-xs group"
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/90 hover:bg-slate-750 rounded-xl border border-slate-700/80 transition-all cursor-pointer text-xs group"
                 title="Gérer mon profil, mot de passe & déconnexion"
               >
-                <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-xs ring-1 ring-indigo-400/30 group-hover:bg-indigo-500 transition-colors">
+                <div className="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-[11px] shadow-xs ring-1 ring-indigo-400/30 group-hover:bg-indigo-500 transition-colors">
                   {currentUser.firstName ? currentUser.firstName.charAt(0).toUpperCase() : 'U'}
                   {currentUser.lastName ? currentUser.lastName.charAt(0).toUpperCase() : ''}
                 </div>
                 <div className="text-left">
                   <div className="flex items-center gap-1.5">
-                    <span className="font-bold text-slate-100 group-hover:text-indigo-300 transition-colors">
+                    <span className="font-bold text-slate-100 group-hover:text-indigo-300 transition-colors text-xs">
                       {currentUser.firstName} {currentUser.lastName}
                     </span>
                     {currentUser.isAdmin && (
@@ -404,7 +410,7 @@ export default function App() {
                     {currentUser.isAdmin ? 'Administrateur' : currentUser.role || 'Collaborateur'}
                   </p>
                 </div>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-colors ml-1" />
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-colors ml-0.5" />
               </button>
             )}
 
@@ -423,7 +429,7 @@ export default function App() {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700/80 hover:text-white rounded-xl border border-slate-700/80 transition-all shadow-xs cursor-pointer"
             >
               <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
-              Référentiel (Modèles)
+              Référentiel
             </button>
             
             {!selectedProjectId && canManageProjects && (
