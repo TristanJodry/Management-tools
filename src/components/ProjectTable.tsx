@@ -16,9 +16,11 @@ import {
   Trash2, 
   CheckCircle2, 
   AlertTriangle, 
+  AlertOctagon,
   HelpCircle,
   FileCheck
 } from 'lucide-react';
+import { computeProjectAlerts } from './ProjectAlertsBanner';
 
 interface ProjectTableProps {
   projects: Project[];
@@ -223,12 +225,42 @@ export default function ProjectTable({
                     {/* Project & description */}
                     <td className="py-4 px-5 max-w-xs">
                       <div>
-                        <button
-                          onClick={() => onSelectProject(project)}
-                          className="font-bold text-slate-900 dark:text-slate-100 text-sm hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline text-left"
-                        >
-                          {project.name}
-                        </button>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            onClick={() => onSelectProject(project)}
+                            className="font-bold text-slate-900 dark:text-slate-100 text-sm hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline text-left"
+                          >
+                            {project.name}
+                          </button>
+                          {(() => {
+                            const alerts = computeProjectAlerts(project);
+                            const crit = alerts.filter(a => a.type === 'danger').length;
+                            const warn = alerts.filter(a => a.type === 'warning').length;
+                            if (crit > 0) {
+                              return (
+                                <span 
+                                  title={`${crit} alerte(s) critique(s)`}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 rounded-md"
+                                >
+                                  <AlertOctagon className="w-3 h-3 text-rose-600" />
+                                  {crit}
+                                </span>
+                              );
+                            }
+                            if (warn > 0) {
+                              return (
+                                <span 
+                                  title={`${warn} avertissement(s)`}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-md"
+                                >
+                                  <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                  {warn}
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
                           {project.description}
                         </p>

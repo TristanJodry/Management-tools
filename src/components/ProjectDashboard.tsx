@@ -56,7 +56,8 @@ import {
   Copy,
   Paperclip,
   RotateCw,
-  Download
+  Download,
+  FileSpreadsheet
 } from 'lucide-react';
 
 import {
@@ -72,6 +73,7 @@ import {
   exportRexPDF,
   exportExecutiveSummaryPDF
 } from '../utils/pdfExport';
+import { exportProjectToCsv } from '../utils/csvExport';
 
 import TeamCharterTab from './TeamCharterTab';
 import DecisionMatrixTab from './DecisionMatrixTab';
@@ -82,6 +84,7 @@ import DocumentsTab from './DocumentsTab';
 import { GanttChartVisualizer } from './GanttChartVisualizer';
 import { RiskMatrixVisualizer } from './RiskMatrixVisualizer';
 import KanbanBoard from './KanbanBoard';
+import ProjectAlertsBanner from './ProjectAlertsBanner';
 
 interface ProjectDashboardProps {
   project: Project;
@@ -183,6 +186,13 @@ export default function ProjectDashboard({
     setKpiList(project.kpis || []);
     setStaffComms(project.staffCommunications || []);
     setGovernanceMeetings(project.governanceMeetings || []);
+    if (project.raciAssignments) {
+      const init: Record<string, Record<string, string>> = {};
+      project.raciAssignments.forEach((item) => {
+        init[item.rowName] = item.assignments || {};
+      });
+      setRaciAssignments(init);
+    }
   }, [project]);
 
   // Helper sync with parent
@@ -208,8 +218,8 @@ export default function ProjectDashboard({
 
     let totalSpent = 0;
     currentBudget.forEach((group) => {
-      group.expenses.forEach((exp) => {
-        totalSpent += exp.spent;
+      (group.expenses || []).forEach((exp) => {
+        totalSpent += Number(exp.spent) || 0;
       });
     });
 
@@ -512,22 +522,81 @@ export default function ProjectDashboard({
     const ganttElements: string[] = [];
     ganttPhases.forEach((phase) => {
       phase.items.forEach((item) => {
-        const prefix = item.type === 'milestone' ? '◆ Jalon: ' : '■ Tâche: ';
+        const prefix = item.type === 'milestone' ? 'Jalon : ' : 'Tâche : ';
         ganttElements.push(`${prefix}${item.name}`);
       });
     });
 
-    const list = [...ganttElements, ...customRaciRows];
+    const storedRows = (project.raciAssignments || []).map((r) => r.rowName);
+    const defaultActivities = [
+      'Cadrage & Charte Projet',
+      'Spécifications & Besoins',
+      'Conception & Architecture',
+      'Réalisation / Développement',
+      'Recette & Validation',
+      'Déploiement & Mise en prod',
+      'Clôture & REX'
+    ];
+
+    const rawList = [...ganttElements, ...customRaciRows, ...storedRows];
+    const list = rawList.length > 0 ? rawList : defaultActivities;
     return Array.from(new Set(list));
   };
 
-  // Filter out duplicate 'Chef de Projet' role from columns
+  // Provide all team members if available, or stakeholder groups / default roles
   const getRaciParticipants = () => {
-    const participants: { id: string; name: string; type: 'group' }[] = [];
-    stakeholderGroups.forEach((g) => {
-      participants.push({ id: `group-${g.id}`, name: g.name, type: 'group' });
-    });
+    const participants: { id: string; name: string; role: string; type: 'member' | 'group' }[] = [];
+    if (globalTeam && globalTeam.length > 0) {
+      globalTeam.forEach((m) => {
+        participants.push({
+          id: m.id,
+          name: `${m.firstName} ${m.lastName || ''}`.trim(),
+          role: m.role || "Membre d'équipe",
+          type: 'member'
+        });
+      });
+    } else if (stakeholderGroups && stakeholderGroups.length > 0) {
+      stakeholderGroups.forEach((g) => {
+        participants.push({ id: `group-${g.id}`, name: g.name, role: 'Groupe', type: 'group' });
+      });
+    } else {
+      participants.push(
+        { id: 'chef', name: 'Chef de Projet', role: 'Pilotage', type: 'member' },
+        { id: 'dev', name: 'Équipe Technique', role: 'Dév', type: 'member' },
+        { id: 'metier', name: 'Référent Métier', role: 'Business', type: 'member' }
+      );
+    }
     return participants;
+  };
+
+  // Resilient cell lookup (supports direct ID, name, clean ID, or normalized row match)
+  const getRaciCellValue = (rowName: string, participantId: string, participantName: string): string => {
+    if (raciAssignments[rowName]) {
+      if (raciAssignments[rowName][participantId]) return raciAssignments[rowName][participantId];
+      if (raciAssignments[rowName][participantName]) return raciAssignments[rowName][participantName];
+      const cleanId = participantId.replace(/^group-/, '');
+      if (raciAssignments[rowName][cleanId]) return raciAssignments[rowName][cleanId];
+      if (raciAssignments[rowName][`group-${cleanId}`]) return raciAssignments[rowName][`group-${cleanId}`];
+    }
+
+    // Normalized search for legacy row keys (e.g., with ◆ or past differences)
+    const normTarget = rowName.replace(/^[◆■●★\s%Æ•\-\[\]]+/gu, '').replace(/^(Jalon|Tâche|Tache)\s*[:\-]?\s*/i, '').trim().toLowerCase();
+    for (const [rKey, rObj] of Object.entries(raciAssignments)) {
+      const normKey = rKey.replace(/^[◆■●★\s%Æ•\-\[\]]+/gu, '').replace(/^(Jalon|Tâche|Tache)\s*[:\-]?\s*/i, '').trim().toLowerCase();
+      if (normKey === normTarget && rObj) {
+        if (rObj[participantId]) return rObj[participantId];
+        if (rObj[participantName]) return rObj[participantName];
+        const cleanId = participantId.replace(/^group-/, '');
+        if (rObj[cleanId]) return rObj[cleanId];
+        if (rObj[`group-${cleanId}`]) return rObj[`group-${cleanId}`];
+        for (const [k, v] of Object.entries(rObj)) {
+          if (k.toLowerCase() === participantName.toLowerCase() || k.toLowerCase() === participantId.toLowerCase()) {
+            return v;
+          }
+        }
+      }
+    }
+    return '';
   };
 
   const [newRaciRow, setNewRaciRow] = useState('');
@@ -628,6 +697,7 @@ export default function ProjectDashboard({
   const [expenseQuantity, setExpenseQuantity] = useState<number | string>(1);
   const [expenseUnitPrice, setExpenseUnitPrice] = useState<number | string>('');
   const [expenseGroupId, setExpenseGroupId] = useState('');
+  const [expenseIsOnlyPlanned, setExpenseIsOnlyPlanned] = useState<boolean>(false);
 
   const [editingBudgetGroup, setEditingBudgetGroup] = useState<BudgetGroup | null>(null);
   const [editingExpense, setEditingExpense] = useState<{ groupId: string; expense: BudgetExpense } | null>(null);
@@ -679,7 +749,10 @@ export default function ProjectDashboard({
 
     const parsedPrice = parseFloat(String(expenseUnitPrice).replace(',', '.'));
     const uPrice = !isNaN(parsedPrice) && parsedPrice >= 0 ? parsedPrice : 0;
-    const totalCalc = qty * uPrice;
+    const totalPlanned = qty * uPrice;
+
+    // If checked as "only planned", spent = 0, otherwise directly goes into consumed
+    const spentVal = expenseIsOnlyPlanned ? 0 : totalPlanned;
 
     const newE: BudgetExpense = {
       id: `exp-${Date.now()}`,
@@ -688,8 +761,9 @@ export default function ProjectDashboard({
       quantity: qty,
       unitPrice: uPrice,
       unitPricePlanned: uPrice,
-      planned: totalCalc,
-      spent: 0
+      unitPriceSpent: uPrice,
+      planned: totalPlanned,
+      spent: spentVal
     };
 
     const updated = budgetGroups.map((g) => {
@@ -705,6 +779,31 @@ export default function ProjectDashboard({
     setExpenseTitle('');
     setExpenseQuantity(1);
     setExpenseUnitPrice('');
+    setExpenseIsOnlyPlanned(false);
+  };
+
+  const handleToggleExpensePaid = (groupId: string, expId: string) => {
+    const updated = budgetGroups.map((g) => {
+      if (g.id === groupId) {
+        return {
+          ...g,
+          expenses: g.expenses.map((e) => {
+            if (e.id === expId) {
+              const currentSpent = e.spent || 0;
+              const plannedVal = e.planned || (e.quantity || 1) * (e.unitPrice || 0);
+              // If already paid/consumed, switch to 0 (Prévue). If 0 (Prévue), switch to full planned (Payé)
+              const newSpent = currentSpent > 0 ? 0 : plannedVal;
+              return { ...e, spent: newSpent };
+            }
+            return e;
+          })
+        };
+      }
+      return g;
+    });
+
+    setBudgetGroups(updated);
+    updateProjectData({ budgetGroups: updated });
   };
 
   const handleUpdateExpense = (e: React.FormEvent) => {
@@ -897,6 +996,7 @@ export default function ProjectDashboard({
 
   // Calculations for KPI Cards
   const initialBudget = project.budget || 0;
+  const dynamicPlanned = budgetGroups.reduce((sum, g) => sum + (g.expenses || []).reduce((s, e) => s + (e.planned || 0), 0), 0);
   const dynamicSpent = budgetGroups.reduce((sum, g) => sum + (g.expenses || []).reduce((s, e) => s + (e.spent || 0), 0), 0);
   const isOverBudget = dynamicSpent > initialBudget && initialBudget > 0;
   const budgetRatio = initialBudget > 0 ? dynamicSpent / initialBudget : 0;
@@ -980,6 +1080,17 @@ export default function ProjectDashboard({
           </div>
 
           <div className="flex items-center gap-2 self-start md:self-center shrink-0">
+            {/* Discreet Excel / CSV export icon button */}
+            <button
+              type="button"
+              onClick={() => exportProjectToCsv(project, globalTeam)}
+              className="p-2.5 bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 font-bold rounded-xl transition-all flex items-center justify-center cursor-pointer shadow-2xs hover:shadow-xs active:scale-95 group"
+              title="Exporter les données au format Excel / CSV"
+              aria-label="Export Excel / CSV"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" />
+            </button>
+
             <button
               type="button"
               onClick={() => exportExecutiveSummaryPDF(project, globalTeam)}
@@ -1024,6 +1135,12 @@ export default function ProjectDashboard({
           </div>
         </div>
       </div>
+
+      {/* PROACTIVE ALERTS & VIGILANCE BANNER */}
+      <ProjectAlertsBanner 
+        project={project} 
+        onNavigateTab={(tabKey) => setActiveTab(tabKey)}
+      />
 
       {/* 2. CORE PERFORMANCE INDICATORS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1837,7 +1954,8 @@ export default function ProjectDashboard({
                       <th className="p-3 border-b border-slate-200">Activité / Livrable</th>
                       {getRaciParticipants().map((part) => (
                         <th key={part.id} className="p-3 border-b border-slate-200 text-center">
-                          {part.name}
+                          <div>{part.name}</div>
+                          {part.role && <div className="text-[9px] font-normal text-slate-400 capitalize">{part.role}</div>}
                         </th>
                       ))}
                       {canEditCurrentModule && <th className="p-3 border-b border-slate-200 text-center w-12">Action</th>}
@@ -1848,7 +1966,7 @@ export default function ProjectDashboard({
                       <tr key={rowName} className="hover:bg-slate-50/60 border-b border-slate-100">
                         <td className="p-3 font-semibold text-slate-800">{rowName}</td>
                         {getRaciParticipants().map((part) => {
-                          const currentVal = raciAssignments[rowName]?.[part.id] || '';
+                          const currentVal = getRaciCellValue(rowName, part.id, part.name);
                           return (
                             <td key={part.id} className="p-2 text-center">
                               <select
@@ -2055,21 +2173,30 @@ export default function ProjectDashboard({
                 </button>
               </div>
 
-              {/* Summary Banner */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+              {/* Summary Banner (4 metrics: Alloué, Prévu total, Consommé réel, Solde) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
                 <div>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Budget Initial Allocé (Création)</span>
-                  <span className="text-lg font-bold font-mono text-slate-900">{formatEuro(initialBudget)}</span>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Budget Alloué (Cadrage)</span>
+                  <span className="text-lg font-bold font-mono text-slate-900 dark:text-white">{formatEuro(initialBudget)}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-indigo-500 font-bold uppercase block">Budget Prévu (Consommé + Prévu)</span>
+                  <span className="text-lg font-bold font-mono text-indigo-700 dark:text-indigo-300">
+                    {formatEuro(dynamicPlanned)}
+                  </span>
+                  <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                    Payé : {formatEuro(dynamicSpent)} • À venir : {formatEuro(Math.max(0, dynamicPlanned - dynamicSpent))}
+                  </div>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold uppercase block">Budget Consommé (Dépenses)</span>
-                  <span className={`text-lg font-bold font-mono ${isOverBudget ? 'text-rose-600' : 'text-emerald-600'}`}>
+                  <span className={`text-lg font-bold font-mono ${isOverBudget ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                     {formatEuro(dynamicSpent)}
                   </span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Solde Restant</span>
-                  <span className={`text-lg font-bold font-mono ${initialBudget - dynamicSpent < 0 ? 'text-rose-600' : 'text-indigo-600'}`}>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block">Solde Restant (Alloué - Consommé)</span>
+                  <span className={`text-lg font-bold font-mono ${initialBudget - dynamicSpent < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-200'}`}>
                     {formatEuro(initialBudget - dynamicSpent)}
                   </span>
                 </div>
@@ -2085,7 +2212,7 @@ export default function ProjectDashboard({
                       <input
                         type="text"
                         required
-                        placeholder="ex: Prestations Externe"
+                        placeholder="ex: Prestations Externes, Matériel..."
                         value={newBudgetGroupTitle}
                         onChange={(e) => setNewBudgetGroupTitle(e.target.value)}
                         className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
@@ -2097,7 +2224,7 @@ export default function ProjectDashboard({
 
                     {/* Add expense line */}
                     <form onSubmit={handleAddExpenseToGroup} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">Ajouter une Ligne de Dépense</h4>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">Ajouter une Dépense</h4>
                       <select
                         value={expenseGroupId}
                         onChange={(e) => setExpenseGroupId(e.target.value)}
@@ -2126,7 +2253,7 @@ export default function ProjectDashboard({
                           <input
                             type="number"
                             min={1}
-                            placeholder="Qté (ex: 10)"
+                            placeholder="Qté (ex: 1)"
                             value={expenseQuantity}
                             onChange={(e) => setExpenseQuantity(e.target.value ? Number(e.target.value) : '')}
                             className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono"
@@ -2148,10 +2275,25 @@ export default function ProjectDashboard({
 
                       {/* Auto-calculated Total Amount */}
                       <div className="p-2.5 bg-indigo-50/70 border border-indigo-100 rounded-lg flex items-center justify-between text-xs">
-                        <span className="text-[11px] font-semibold text-indigo-900">Montant Total Calculé :</span>
+                        <span className="text-[11px] font-semibold text-indigo-900">Montant :</span>
                         <span className="font-mono font-bold text-indigo-700 text-sm">
                           {formatEuro((Number(expenseQuantity) || 1) * (Number(expenseUnitPrice) || 0))}
                         </span>
+                      </div>
+
+                      {/* Checkbox: Dépense prévue (pas encore consommée) */}
+                      <div className="pt-2 border-t border-slate-200">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={expenseIsOnlyPlanned}
+                            onChange={(e) => setExpenseIsOnlyPlanned(e.target.checked)}
+                            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                          />
+                          <span className="text-xs text-slate-700">
+                            Dépense prévue <span className="text-[11px] text-slate-500">(non ajoutée au consommé)</span>
+                          </span>
+                        </label>
                       </div>
 
                       <button type="submit" className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded transition-colors cursor-pointer shadow-2xs">
@@ -2163,79 +2305,131 @@ export default function ProjectDashboard({
 
                 {/* Groups list */}
                 <div className={`${canEditCurrentModule ? 'lg:col-span-2' : 'lg:col-span-3'} space-y-4`}>
-                  {budgetGroups.map((group) => (
-                    <div key={group.id} className="bg-slate-50/50 rounded-xl border border-slate-200 p-4 space-y-3">
-                      <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                        <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">{group.title}</h4>
-                        {canEditCurrentModule && (
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => setEditingBudgetGroup(group)}
-                              className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"
-                              title="Modifier"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleRemoveBudgetGroup(group.id)}
-                              className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                  {budgetGroups.map((group) => {
+                    const groupPlanned = (group.expenses || []).reduce((s, e) => s + (e.planned || 0), 0);
+                    const groupSpent = (group.expenses || []).reduce((s, e) => s + (e.spent || 0), 0);
 
-                      <div className="space-y-1.5">
-                        {group.expenses.map((exp) => {
-                          const qty = exp.quantity || 1;
-                          const uPrice = exp.unitPrice ?? (exp.planned ? exp.planned / qty : 0);
-                          return (
-                            <div key={exp.id} className="bg-white p-2.5 rounded-lg border border-slate-200 flex justify-between items-center text-xs">
-                              <div className="space-y-0.5">
-                                <span className="font-bold text-slate-800 block">
-                                  {exp.title || exp.name}
-                                </span>
-                                <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono">
-                                  <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                                    Qté: {qty}
-                                  </span>
-                                  {uPrice > 0 && (
-                                    <span>
-                                      × {formatEuro(uPrice)} / unité
+                    return (
+                      <div key={group.id} className="bg-slate-50/50 rounded-xl border border-slate-200 p-4 space-y-3">
+                        <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">{group.title}</h4>
+                            <div className="flex items-center gap-3 text-[11px] font-mono text-slate-500 mt-0.5">
+                              <span>Consommé : <strong className={groupSpent > groupPlanned && groupPlanned > 0 ? 'text-rose-600' : 'text-emerald-600'}>{formatEuro(groupSpent)}</strong></span>
+                            </div>
+                          </div>
+                          {canEditCurrentModule && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => setEditingBudgetGroup(group)}
+                                className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"
+                                title="Modifier"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleRemoveBudgetGroup(group.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-2">
+                          {group.expenses.map((exp) => {
+                            const qty = exp.quantity || 1;
+                            const uPrice = exp.unitPrice ?? (exp.planned ? exp.planned / qty : 0);
+                            const spent = exp.spent || 0;
+                            const planned = exp.planned || (qty * uPrice);
+                            const isPaid = spent > 0;
+
+                            return (
+                              <div key={exp.id} className="bg-white p-3 rounded-lg border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                                <div className="space-y-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-bold text-slate-800">
+                                      {exp.title || exp.name}
                                     </span>
+                                    {isPaid ? (
+                                      <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                                        Consommé à 100%
+                                      </span>
+                                    ) : (
+                                      <span className="bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                                        Prévue
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono">
+                                    <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                      Qté: {qty}
+                                    </span>
+                                    {uPrice > 0 && (
+                                      <span>
+                                        × {formatEuro(uPrice)} / unité
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 font-mono self-end sm:self-auto">
+                                  <div className="text-right text-xs">
+                                    <div className="text-[11px] font-bold">
+                                      {isPaid ? (
+                                        <>Consommé: <span className="text-emerald-600 font-bold">{formatEuro(spent)}</span></>
+                                      ) : (
+                                        <>Prévu: <span className="text-amber-600 font-bold">{formatEuro(planned)}</span></>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {canEditCurrentModule && (
+                                    <div className="flex items-center gap-1.5 pl-2 border-l border-slate-100">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleToggleExpensePaid(group.id, exp.id)}
+                                        className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all shadow-2xs cursor-pointer ${
+                                          isPaid
+                                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'
+                                            : 'bg-amber-50 text-amber-700 border border-amber-300 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300'
+                                        }`}
+                                        title={isPaid ? 'Cliquer pour repasser en Prévue' : 'Cliquer pour valider en Payé'}
+                                      >
+                                        {isPaid ? 'Payé ✓' : 'Prévue'}
+                                      </button>
+                                      <button
+                                        onClick={() => setEditingExpense({ groupId: group.id, expense: { ...exp, quantity: qty, unitPrice: uPrice, spent: spent, planned: planned } })}
+                                        className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"
+                                        title="Modifier"
+                                      >
+                                        <Edit3 className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleRemoveExpenseFromGroup(group.id, exp.id)}
+                                        className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                                        title="Supprimer"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
                                   )}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-3 font-mono font-bold">
-                                <span className="text-indigo-700 bg-indigo-50 px-2 py-1 rounded border border-indigo-100">
-                                  Total: {formatEuro(exp.planned)}
-                                </span>
-                                {canEditCurrentModule && (
-                                  <>
-                                    <button
-                                      onClick={() => setEditingExpense({ groupId: group.id, expense: { ...exp, quantity: qty, unitPrice: uPrice } })}
-                                      className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"
-                                      title="Modifier"
-                                    >
-                                      <Edit3 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => handleRemoveExpenseFromGroup(group.id, exp.id)}
-                                      className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
-                                      title="Supprimer"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
+                            );
+                          })}
+
+                          {group.expenses.length === 0 && (
+                            <div className="text-center py-4 text-xs text-slate-400 italic bg-white rounded-lg border border-dashed border-slate-200">
+                              Aucune dépense dans ce poste.
                             </div>
-                          );
-                        })}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
               </div>
@@ -2958,10 +3152,68 @@ export default function ProjectDashboard({
             </div>
 
             <div className="p-2.5 bg-indigo-50 border border-indigo-100 rounded-lg flex items-center justify-between text-xs">
-              <span className="text-[11px] font-semibold text-indigo-900">Total Calculé :</span>
+              <span className="text-[11px] font-semibold text-indigo-900">Montant Total :</span>
               <span className="font-mono font-bold text-indigo-700 text-sm">
                 {formatEuro(editingExpense.expense.planned)}
               </span>
+            </div>
+
+            <div className="space-y-1.5 pt-1">
+              <div className="flex justify-between items-center">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase">Statut de la dépense</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingExpense({
+                        ...editingExpense,
+                        expense: { ...editingExpense.expense, spent: editingExpense.expense.planned }
+                      });
+                    }}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded transition-colors ${
+                      (editingExpense.expense.spent || 0) > 0
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    Payé ✓
+                  </button>
+                  <span className="text-slate-300">•</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingExpense({
+                        ...editingExpense,
+                        expense: { ...editingExpense.expense, spent: 0 }
+                      });
+                    }}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded transition-colors ${
+                      (editingExpense.expense.spent || 0) === 0
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    Prévue (0 €)
+                  </button>
+                </div>
+              </div>
+              <input
+                type="number"
+                min={0}
+                step="any"
+                value={editingExpense.expense.spent ?? 0}
+                onChange={(e) => {
+                  const s = Number(e.target.value) || 0;
+                  setEditingExpense({
+                    ...editingExpense,
+                    expense: {
+                      ...editingExpense.expense,
+                      spent: s
+                    }
+                  });
+                }}
+                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono font-bold text-emerald-700"
+              />
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setEditingExpense(null)} className="px-3 py-1.5 text-xs font-bold text-slate-600">
