@@ -1242,8 +1242,8 @@ export default function ProjectDashboard({
         onNavigateTab={(tabKey) => setActiveTab(tabKey)}
       />
 
-      {/* 2. CORE PERFORMANCE INDICATORS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* 2. CORE PERFORMANCE INDICATORS (Coûts & Avancement Planning) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
         {/* COÛTS CARD */}
         <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
@@ -1315,39 +1315,6 @@ export default function ProjectDashboard({
               />
             </div>
           </div>
-        </div>
-
-        {/* QUALITÉ CARD */}
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <Award className="w-4 h-4 text-amber-500" /> Suivi Qualité
-            </h3>
-            <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
-              Conformité: {project.qualityIndex}%
-            </span>
-          </div>
-
-          <div className="space-y-1">
-            <span className="text-[10px] text-slate-400 font-bold uppercase block">Indice de Satisfaction</span>
-            <div className="flex gap-1.5 items-center">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Check
-                  key={star}
-                  className={`w-4 h-4 ${
-                    star <= Math.round((project.qualityIndex / 100) * 5)
-                      ? 'text-amber-500 fill-amber-500'
-                      : 'text-slate-200'
-                  }`}
-                />
-              ))}
-              <span className="text-xs text-slate-500 font-semibold ml-2">Qualité OK</span>
-            </div>
-          </div>
-
-          <p className="text-[11px] text-slate-400 leading-normal italic line-clamp-2">
-            {project.qualityComments || 'Les normes de qualité et tests sont conformes aux attentes.'}
-          </p>
         </div>
 
       </div>

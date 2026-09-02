@@ -333,13 +333,13 @@ export default function ProjectModal({ isOpen, onClose, onSave, editingProject, 
               </div>
             </div>
 
-            {/* Section 3: Indicateurs & Planning (Costs, Delays, Quality) */}
+            {/* Section 3: Indicateurs & Planning (Costs, Delays) */}
             <div>
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3 border-b border-slate-100 dark:border-slate-800 pb-1">
-                Indicateurs de Pilotage (Coûts, Délais, Qualité)
+                Indicateurs de Pilotage (Coûts & Délais)
               </h4>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Coûts */}
                 <div className="space-y-3 bg-slate-50/50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
                   <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Suivi des Coûts</span>
@@ -395,35 +395,6 @@ export default function ProjectModal({ isOpen, onClose, onSave, editingProject, 
                       <option value="medium">Moyen - Retard mineur potentiel</option>
                       <option value="high">Élevé - Retard critique</option>
                     </select>
-                  </div>
-                </div>
-
-                {/* Qualité */}
-                <div className="space-y-3 bg-slate-50/50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Suivi de la Qualité</span>
-                  <div>
-                    <div className="flex justify-between mb-0.5">
-                      <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">Index Qualité</label>
-                      <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{qualityIndex}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={qualityIndex}
-                      onChange={(e) => setQualityIndex(Number(e.target.value))}
-                      className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-0.5">Remarques Qualité / Recette</label>
-                    <textarea
-                      value={qualityComments}
-                      onChange={(e) => setQualityComments(e.target.value)}
-                      rows={3}
-                      placeholder="ex: Recette en cours, validation des tests..."
-                      className="w-full text-xs px-2 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-hidden bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                    />
                   </div>
                 </div>
               </div>

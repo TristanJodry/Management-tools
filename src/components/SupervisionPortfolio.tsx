@@ -422,9 +422,9 @@ export default function SupervisionPortfolio({
           </div>
 
           <div className="bg-slate-800/60 backdrop-blur-xs p-3 rounded-xl border border-slate-700/60">
-            <span className="text-[10px] uppercase font-bold text-purple-400">Score Qualité</span>
-            <div className="text-xl font-black text-purple-300 mt-0.5">{metrics.avgQuality}%</div>
-            <span className="text-[10px] text-slate-400">Moyenne transversale</span>
+            <span className="text-[10px] uppercase font-bold text-indigo-400">Équipe Mobilisée</span>
+            <div className="text-xl font-black text-indigo-300 mt-0.5">{teamWorkload.length}</div>
+            <span className="text-[10px] text-slate-400">Collaborateurs actifs</span>
           </div>
 
           <div className="bg-slate-800/60 backdrop-blur-xs p-3 rounded-xl border border-slate-700/60">
@@ -444,7 +444,7 @@ export default function SupervisionPortfolio({
             { id: 'financial', label: 'Finances & Budget', icon: CircleDollarSign },
             { id: 'resources', label: 'Ressources & Charge (Workload)', icon: Users, count: teamWorkload.length },
             { id: 'milestones', label: 'Échéancier des Jalons', icon: Calendar, count: consolidatedMilestones.length },
-            { id: 'kpis', label: 'Indicateurs KPIs & Qualité', icon: Award, count: consolidatedKpis.length },
+            { id: 'kpis', label: 'Indicateurs KPIs', icon: Award, count: consolidatedKpis.length },
             { id: 'risks', label: 'Risques Transversaux', icon: ShieldAlert, count: consolidatedRisks.length }
           ].map((tab) => {
             const Icon = tab.icon;
@@ -1052,7 +1052,7 @@ export default function SupervisionPortfolio({
             <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
-                  Tableau de Bord des KPIs & Conformité Qualité
+                  Tableau de Bord des KPIs & Performance
                 </h3>
                 <p className="text-[11px] text-slate-400">
                   Indicateurs de performance consolidés pour chaque projet du portefeuille

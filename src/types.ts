@@ -159,6 +159,9 @@ export interface ProjectDocumentItem {
   uploadedBy: string;
   notes?: string;
   fileUrl?: string;
+  fileName?: string;
+  fileType?: string;
+  fileData?: string; // Base64 or Object URL for uploaded local files
 }
 
 export interface Kpi {
