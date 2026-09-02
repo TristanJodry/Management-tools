@@ -608,7 +608,18 @@ export default function ProjectDashboard({
     return participants;
   };
 
-  // Resilient cell lookup (supports direct ID, name, clean ID, or normalized row match)
+  // Resilient cell lookup (supports direct ID, name, clean ID, normalized row, or group stakeholders)
+  const formatCellCode = (val: string | undefined): string => {
+    if (!val) return '';
+    const trimmed = String(val).trim();
+    if (!trimmed || trimmed === '-') return '';
+    const first = trimmed.charAt(0).toUpperCase();
+    if (first === 'R' || first === 'A' || first === 'C' || first === 'I') {
+      return first;
+    }
+    return trimmed;
+  };
+
   const getRaciCellValue = (rowName: string, participantId: string, participantName: string): string => {
     const cleanId = participantId.replace(/^group-/, '');
     const searchKeys = [
@@ -618,37 +629,51 @@ export default function ProjectDashboard({
       participantName
     ];
 
-    if (raciAssignments[rowName]) {
+    const currentGroup = (stakeholderGroups || []).find(
+      (g) => g.id === cleanId || `group-${g.id}` === participantId || g.name.toLowerCase() === participantName.toLowerCase()
+    );
+
+    const checkAssignmentsObj = (obj: Record<string, any> | undefined): string => {
+      if (!obj) return '';
       for (const k of searchKeys) {
-        if (raciAssignments[rowName][k]) return raciAssignments[rowName][k];
+        if (obj[k]) return formatCellCode(obj[k]);
       }
-      for (const [k, v] of Object.entries(raciAssignments[rowName])) {
+      for (const [k, v] of Object.entries(obj)) {
         if (
           k.toLowerCase() === participantName.toLowerCase() ||
           k.toLowerCase() === participantId.toLowerCase() ||
           k.toLowerCase() === cleanId.toLowerCase()
         ) {
-          return String(v);
+          return formatCellCode(String(v));
         }
       }
-    }
+      if (currentGroup && currentGroup.stakeholders && currentGroup.stakeholders.length > 0) {
+        for (const sh of currentGroup.stakeholders) {
+          const shName = (sh.name || '').trim();
+          const shId = sh.id;
+          for (const [k, v] of Object.entries(obj)) {
+            if (
+              (shId && k.toLowerCase() === shId.toLowerCase()) ||
+              (shName && k.toLowerCase() === shName.toLowerCase())
+            ) {
+              return formatCellCode(String(v));
+            }
+          }
+        }
+      }
+      return '';
+    };
 
-    // Normalized search for legacy row keys (e.g., with past symbols or differences)
+    // 1. Direct match on rowName
+    const directRes = checkAssignmentsObj(raciAssignments[rowName]);
+    if (directRes) return directRes;
+
+    // 2. Normalized search for legacy row keys (e.g., with past symbols or differences)
     const normTarget = normalizeRaciKey(rowName);
     for (const [rKey, rObj] of Object.entries(raciAssignments)) {
       if (normalizeRaciKey(rKey) === normTarget && rObj) {
-        for (const k of searchKeys) {
-          if (rObj[k]) return rObj[k];
-        }
-        for (const [k, v] of Object.entries(rObj)) {
-          if (
-            k.toLowerCase() === participantName.toLowerCase() ||
-            k.toLowerCase() === participantId.toLowerCase() ||
-            k.toLowerCase() === cleanId.toLowerCase()
-          ) {
-            return String(v);
-          }
-        }
+        const normRes = checkAssignmentsObj(rObj);
+        if (normRes) return normRes;
       }
     }
     return '';
@@ -1993,7 +2018,22 @@ export default function ProjectDashboard({
                 </div>
                 <button
                   type="button"
-                  onClick={() => exportRaciPDF(project, globalTeam)}
+                  onClick={() => {
+                    const currentRaciArray = Object.entries(raciAssignments).map(([rowName, assignments]) => ({
+                      rowName,
+                      assignments: assignments as Record<string, string>
+                    }));
+                    exportRaciPDF(
+                      {
+                        ...project,
+                        raciAssignments: currentRaciArray,
+                        customRaciRows,
+                        stakeholderGroups,
+                        ganttPhases
+                      },
+                      globalTeam
+                    );
+                  }}
                   className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
                   title="Télécharger la matrice RACI en PDF"
                 >

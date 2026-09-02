@@ -640,6 +640,17 @@ export function exportPlanificationPDF(project: Project, globalTeam: TeamMember[
   doc.save(`${project.id || 'projet'}_planification_gantt.pdf`);
 }
 
+function formatRaciCode(val: string | undefined): string {
+  if (!val) return '-';
+  const trimmed = val.trim();
+  if (!trimmed || trimmed === '-') return '-';
+  const first = trimmed.charAt(0).toUpperCase();
+  if (first === 'R' || first === 'A' || first === 'C' || first === 'I') {
+    return first;
+  }
+  return trimmed;
+}
+
 // 4. Export Matrice RACI PDF
 export function exportRaciPDF(project: Project, globalTeam: TeamMember[] = []) {
   const doc = new jsPDF('l', 'mm', 'a4');
@@ -662,21 +673,22 @@ export function exportRaciPDF(project: Project, globalTeam: TeamMember[] = []) {
   currentY += 18;
 
   // Collect participants: Stakeholder Groups from Parties Prenantes
-  type RaciParticipant = { id: string; name: string; role?: string };
+  type RaciParticipant = { id: string; name: string; role?: string; stakeholders?: any[] };
   let participants: RaciParticipant[] = [];
 
   if (project.stakeholderGroups && project.stakeholderGroups.length > 0) {
     participants = project.stakeholderGroups.map((g) => ({
       id: `group-${g.id}`,
       name: g.name,
-      role: `${(g.stakeholders || []).length} membre(s)`
+      role: `${(g.stakeholders || []).length} membre(s)`,
+      stakeholders: g.stakeholders || []
     }));
   } else {
     participants = [
-      { id: 'group-copil', name: 'Comité de Pilotage', role: 'COPIL' },
-      { id: 'group-equipe', name: 'Équipe Projet', role: 'MOE' },
-      { id: 'group-metier', name: 'Direction Métier', role: 'MOA' },
-      { id: 'group-prestataire', name: 'Partenaires & Prestataires', role: 'Externe' }
+      { id: 'group-copil', name: 'Comité de Pilotage', role: 'COPIL', stakeholders: [] },
+      { id: 'group-equipe', name: 'Équipe Projet', role: 'MOE', stakeholders: [] },
+      { id: 'group-metier', name: 'Direction Métier', role: 'MOA', stakeholders: [] },
+      { id: 'group-prestataire', name: 'Partenaires & Prestataires', role: 'Externe', stakeholders: [] }
     ];
   }
 
@@ -742,38 +754,60 @@ export function exportRaciPDF(project: Project, globalTeam: TeamMember[] = []) {
   const rowsToUse = rawRows.length > 0 ? rawRows : defaultActivities;
 
   const body = rowsToUse.map((rawActName) => {
-    // Lookup assignments for this row
-    let rowAssignments: Record<string, string> | undefined = undefined;
+    // Lookup and merge all assignments matching this row
+    const normTarget = normalizeRaciKey(rawActName);
+    const mergedAssignments: Record<string, string> = {};
 
-    if (project.raciAssignments) {
-      // 1. Exact match
-      const direct = project.raciAssignments.find((r) => r.rowName === rawActName);
-      if (direct && direct.assignments) {
-        rowAssignments = direct.assignments;
-      } else {
-        // 2. Normalized key match
-        const normTarget = normalizeRaciKey(rawActName);
-        const matched = project.raciAssignments.find((r) => normalizeRaciKey(r.rowName) === normTarget);
-        if (matched && matched.assignments) {
-          rowAssignments = matched.assignments;
+    if (project.raciAssignments && Array.isArray(project.raciAssignments)) {
+      project.raciAssignments.forEach((r) => {
+        if (r && r.assignments && (r.rowName === rawActName || normalizeRaciKey(r.rowName) === normTarget)) {
+          Object.entries(r.assignments).forEach(([k, v]) => {
+            if (v && v !== '-') {
+              mergedAssignments[k] = v;
+            }
+          });
         }
-      }
+      });
     }
 
     const assignedCols = participants.map((part) => {
-      if (!rowAssignments) return '-';
-      // Match by participant id
-      if (rowAssignments[part.id]) return rowAssignments[part.id];
       const cleanId = part.id.replace(/^group-/, '');
-      if (rowAssignments[cleanId]) return rowAssignments[cleanId];
-      if (rowAssignments[`group-${cleanId}`]) return rowAssignments[`group-${cleanId}`];
-      // Match by name
-      if (rowAssignments[part.name]) return rowAssignments[part.name];
-      for (const [k, v] of Object.entries(rowAssignments)) {
-        if (k.toLowerCase() === part.name.toLowerCase() || k.toLowerCase() === part.id.toLowerCase()) {
-          return v;
+      const searchKeys = [part.id, cleanId, `group-${cleanId}`, part.name];
+
+      // 1. Direct search keys
+      for (const k of searchKeys) {
+        if (mergedAssignments[k]) {
+          return formatRaciCode(mergedAssignments[k]);
         }
       }
+
+      // 2. Case-insensitive key search
+      for (const [k, v] of Object.entries(mergedAssignments)) {
+        if (
+          k.toLowerCase() === part.name.toLowerCase() ||
+          k.toLowerCase() === part.id.toLowerCase() ||
+          k.toLowerCase() === cleanId.toLowerCase()
+        ) {
+          return formatRaciCode(v);
+        }
+      }
+
+      // 3. Search via group stakeholders if assigned to member
+      if (part.stakeholders && part.stakeholders.length > 0) {
+        for (const sh of part.stakeholders) {
+          const shName = (sh.name || '').trim();
+          const shId = sh.id;
+          for (const [k, v] of Object.entries(mergedAssignments)) {
+            if (
+              (shId && k.toLowerCase() === shId.toLowerCase()) ||
+              (shName && k.toLowerCase() === shName.toLowerCase())
+            ) {
+              return formatRaciCode(v);
+            }
+          }
+        }
+      }
+
       return '-';
     });
 
@@ -1469,24 +1503,48 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
     drawSectionHeader(`${sectionCounter++}. Matrice des Responsabilités (RACI)`);
     const stakeholderGroups = project.stakeholderGroups || [];
     const groupCols = stakeholderGroups.length > 0
-      ? stakeholderGroups.slice(0, 5).map((g) => ({ id: `group-${g.id}`, name: g.name }))
+      ? stakeholderGroups.slice(0, 5).map((g) => ({
+          id: `group-${g.id}`,
+          name: g.name,
+          stakeholders: g.stakeholders || []
+        }))
       : [
-          { id: 'group-copil', name: 'COPIL' },
-          { id: 'group-equipe', name: 'Équipe Projet' },
-          { id: 'group-metier', name: 'Métier' }
+          { id: 'group-copil', name: 'COPIL', stakeholders: [] },
+          { id: 'group-equipe', name: 'Équipe Projet', stakeholders: [] },
+          { id: 'group-metier', name: 'Métier', stakeholders: [] }
         ];
 
-    const headCols = ['Activité / Tâche', ...groupCols.map(g => sanitizePdfText(g.name))];
-    const bodyCols = raciAssignments.map(r => {
-      const assignments = groupCols.map(g => {
+    const headCols = ['Activité / Tâche', ...groupCols.map((g) => sanitizePdfText(g.name))];
+    const bodyCols = raciAssignments.map((r) => {
+      const assignments = groupCols.map((g) => {
         if (!r.assignments) return '-';
-        if (r.assignments[g.id]) return r.assignments[g.id];
         const cleanId = g.id.replace(/^group-/, '');
-        if (r.assignments[cleanId]) return r.assignments[cleanId];
-        if (r.assignments[g.name]) return r.assignments[g.name];
+        const searchKeys = [g.id, cleanId, `group-${cleanId}`, g.name];
+
+        for (const k of searchKeys) {
+          if (r.assignments[k]) return formatRaciCode(r.assignments[k]);
+        }
         for (const [k, v] of Object.entries(r.assignments)) {
-          if (k.toLowerCase() === g.name.toLowerCase() || k.toLowerCase() === g.id.toLowerCase() || k.toLowerCase() === cleanId.toLowerCase()) {
-            return v;
+          if (
+            k.toLowerCase() === g.name.toLowerCase() ||
+            k.toLowerCase() === g.id.toLowerCase() ||
+            k.toLowerCase() === cleanId.toLowerCase()
+          ) {
+            return formatRaciCode(v);
+          }
+        }
+        if (g.stakeholders && g.stakeholders.length > 0) {
+          for (const sh of g.stakeholders) {
+            const shName = (sh.name || '').trim();
+            const shId = sh.id;
+            for (const [k, v] of Object.entries(r.assignments)) {
+              if (
+                (shId && k.toLowerCase() === shId.toLowerCase()) ||
+                (shName && k.toLowerCase() === shName.toLowerCase())
+              ) {
+                return formatRaciCode(v);
+              }
+            }
           }
         }
         return '-';
