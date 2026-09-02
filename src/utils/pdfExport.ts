@@ -702,7 +702,38 @@ export function exportRaciPDF(project: Project, globalTeam: TeamMember[] = []) {
   const customRows = (project.customRaciRows || []).map((r) => r.trim());
   const storedAssignmentRows = (project.raciAssignments || []).map((r) => r.rowName);
 
-  const rawRows = Array.from(new Set([...ganttRows, ...customRows, ...storedAssignmentRows]));
+  const seenNorms = new Set<string>();
+  const rawRows: string[] = [];
+
+  // Priority 1: Gantt rows
+  ganttRows.forEach((g) => {
+    const norm = normalizeRaciKey(g);
+    if (norm && !seenNorms.has(norm)) {
+      seenNorms.add(norm);
+      rawRows.push(g);
+    }
+  });
+
+  // Priority 2: Custom rows
+  customRows.forEach((c) => {
+    const clean = c.replace(/^[◆■●★\s%Æ•\-\[\]]+/gu, '').trim();
+    const norm = normalizeRaciKey(clean);
+    if (norm && !seenNorms.has(norm)) {
+      seenNorms.add(norm);
+      rawRows.push(clean);
+    }
+  });
+
+  // Priority 3: Stored rows
+  storedAssignmentRows.forEach((r) => {
+    const clean = r.replace(/^[◆■●★\s%Æ•\-\[\]]+/gu, '').trim();
+    const norm = normalizeRaciKey(clean);
+    if (norm && !seenNorms.has(norm)) {
+      seenNorms.add(norm);
+      rawRows.push(clean);
+    }
+  });
+
   const defaultActivities = [
     'Cadrage & Charte Projet',
     'Spécifications & Besoins',

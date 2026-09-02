@@ -518,6 +518,14 @@ export default function ProjectDashboard({
   // ==========================================
   // 3. RACI MATRIX LOGIC
   // ==========================================
+  const normalizeRaciKey = (key: string): string => {
+    return (key || '')
+      .replace(/^[◆■●★\s%Æ•\-\[\]]+/gu, '')
+      .replace(/^(Jalon|Tâche|Tache)\s*[:\-]?\s*/i, '')
+      .trim()
+      .toLowerCase();
+  };
+
   const getRaciRows = () => {
     const ganttElements: string[] = [];
     ganttPhases.forEach((phase) => {
@@ -527,7 +535,6 @@ export default function ProjectDashboard({
       });
     });
 
-    const storedRows = (project.raciAssignments || []).map((r) => r.rowName);
     const defaultActivities = [
       'Cadrage & Charte Projet',
       'Spécifications & Besoins',
@@ -538,9 +545,43 @@ export default function ProjectDashboard({
       'Clôture & REX'
     ];
 
-    const rawList = [...ganttElements, ...customRaciRows, ...storedRows];
-    const list = rawList.length > 0 ? rawList : defaultActivities;
-    return Array.from(new Set(list));
+    const seenNorms = new Set<string>();
+    const finalRows: string[] = [];
+
+    // 1. Gantt elements priority
+    ganttElements.forEach((g) => {
+      const norm = normalizeRaciKey(g);
+      if (norm && !seenNorms.has(norm)) {
+        seenNorms.add(norm);
+        finalRows.push(g);
+      }
+    });
+
+    // 2. Custom rows
+    (customRaciRows || []).forEach((c) => {
+      const clean = c.replace(/^[◆■●★\s%Æ•\-\[\]]+/gu, '').trim();
+      const norm = normalizeRaciKey(clean);
+      if (norm && !seenNorms.has(norm)) {
+        seenNorms.add(norm);
+        finalRows.push(clean);
+      }
+    });
+
+    // 3. Stored rows
+    (project.raciAssignments || []).forEach((r) => {
+      const clean = r.rowName.replace(/^[◆■●★\s%Æ•\-\[\]]+/gu, '').trim();
+      const norm = normalizeRaciKey(clean);
+      if (norm && !seenNorms.has(norm)) {
+        seenNorms.add(norm);
+        finalRows.push(clean);
+      }
+    });
+
+    if (finalRows.length === 0) {
+      return defaultActivities;
+    }
+
+    return finalRows;
   };
 
   // Provide all team members if available, or stakeholder groups / default roles
@@ -610,20 +651,40 @@ export default function ProjectDashboard({
   };
 
   const handleDeleteCustomRaciRow = (rowName: string) => {
-    const updatedCustom = customRaciRows.filter((r) => r !== rowName);
+    const targetNorm = normalizeRaciKey(rowName);
+    const updatedCustom = customRaciRows.filter((r) => normalizeRaciKey(r) !== targetNorm);
     setCustomRaciRows(updatedCustom);
     const updatedRaci = { ...raciAssignments };
-    delete updatedRaci[rowName];
+    Object.keys(updatedRaci).forEach((k) => {
+      if (normalizeRaciKey(k) === targetNorm) {
+        delete updatedRaci[k];
+      }
+    });
     setRaciAssignments(updatedRaci);
-    updateProjectData({ customRaciRows: updatedCustom });
+    const finalRaciArray = Object.entries(updatedRaci).map(([name, assignments]) => ({
+      rowName: name,
+      assignments: assignments as Record<string, string>
+    }));
+    updateProjectData({ customRaciRows: updatedCustom, raciAssignments: finalRaciArray });
   };
 
   const handleUpdateRaciCell = (rowName: string, participantId: string, value: string) => {
+    const targetNorm = normalizeRaciKey(rowName);
     const nextRaci = { ...raciAssignments };
-    if (!nextRaci[rowName]) {
-      nextRaci[rowName] = {};
-    }
-    nextRaci[rowName][participantId] = value;
+
+    // Migrate any legacy key that normalized to the same row
+    let mergedAssignments: Record<string, string> = {};
+    Object.keys(nextRaci).forEach((k) => {
+      if (normalizeRaciKey(k) === targetNorm) {
+        mergedAssignments = { ...mergedAssignments, ...nextRaci[k] };
+        if (k !== rowName) {
+          delete nextRaci[k];
+        }
+      }
+    });
+
+    mergedAssignments[participantId] = value;
+    nextRaci[rowName] = mergedAssignments;
     setRaciAssignments(nextRaci);
 
     const finalRaciArray = Object.entries(nextRaci).map(([name, assignments]) => ({
