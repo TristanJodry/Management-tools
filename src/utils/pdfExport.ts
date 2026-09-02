@@ -661,33 +661,28 @@ export function exportRaciPDF(project: Project, globalTeam: TeamMember[] = []) {
 
   currentY += 18;
 
-  // Collect participants: Team members if available, or groups / default roles
-  type RaciParticipant = { id: string; name: string; role: string };
+  // Collect participants: Stakeholder Groups from Parties Prenantes
+  type RaciParticipant = { id: string; name: string; role?: string };
   let participants: RaciParticipant[] = [];
 
-  if (globalTeam && globalTeam.length > 0) {
-    participants = globalTeam.map((m) => ({
-      id: m.id,
-      name: `${m.firstName} ${m.lastName || ''}`.trim(),
-      role: m.role || "Membre d'équipe"
-    }));
-  } else if (project.stakeholderGroups && project.stakeholderGroups.length > 0) {
+  if (project.stakeholderGroups && project.stakeholderGroups.length > 0) {
     participants = project.stakeholderGroups.map((g) => ({
       id: `group-${g.id}`,
       name: g.name,
-      role: 'Groupe'
+      role: `${(g.stakeholders || []).length} membre(s)`
     }));
   } else {
     participants = [
-      { id: 'chef', name: 'Chef de Projet', role: 'Pilotage' },
-      { id: 'dev', name: 'Équipe Technique', role: 'Dév' },
-      { id: 'metier', name: 'Référent Métier', role: 'Business' }
+      { id: 'group-copil', name: 'Comité de Pilotage', role: 'COPIL' },
+      { id: 'group-equipe', name: 'Équipe Projet', role: 'MOE' },
+      { id: 'group-metier', name: 'Direction Métier', role: 'MOA' },
+      { id: 'group-prestataire', name: 'Partenaires & Prestataires', role: 'Externe' }
     ];
   }
 
   const headCols = [
     'Activité / Livrable Clé',
-    ...participants.map((m) => `${sanitizePdfText(m.name)}\n(${sanitizePdfText(m.role)})`)
+    ...participants.map((m) => `${sanitizePdfText(m.name)}${m.role ? `\n(${sanitizePdfText(m.role)})` : ''}`)
   ];
 
   // Build rows from gantt + custom rows + stored assignments
@@ -1472,21 +1467,25 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
   const raciAssignments = project.raciAssignments || [];
   if (raciAssignments.length > 0) {
     drawSectionHeader(`${sectionCounter++}. Matrice des Responsabilités (RACI)`);
-    const teamCols = globalTeam.length > 0 ? globalTeam.slice(0, 5) : [
-      { id: 'chef', firstName: 'Chef', lastName: 'Projet', role: 'Pilotage' },
-      { id: 'tech', firstName: 'Tech', lastName: 'Lead', role: 'Dev' },
-      { id: 'metier', firstName: 'Référent', lastName: 'Métier', role: 'Business' }
-    ];
+    const stakeholderGroups = project.stakeholderGroups || [];
+    const groupCols = stakeholderGroups.length > 0
+      ? stakeholderGroups.slice(0, 5).map((g) => ({ id: `group-${g.id}`, name: g.name }))
+      : [
+          { id: 'group-copil', name: 'COPIL' },
+          { id: 'group-equipe', name: 'Équipe Projet' },
+          { id: 'group-metier', name: 'Métier' }
+        ];
 
-    const headCols = ['Activité / Tâche', ...teamCols.map(m => sanitizePdfText(`${m.firstName} ${m.lastName || ''}`.trim()))];
+    const headCols = ['Activité / Tâche', ...groupCols.map(g => sanitizePdfText(g.name))];
     const bodyCols = raciAssignments.map(r => {
-      const assignments = teamCols.map(m => {
+      const assignments = groupCols.map(g => {
         if (!r.assignments) return '-';
-        if (r.assignments[m.id]) return r.assignments[m.id];
-        const mName = `${m.firstName} ${m.lastName || ''}`.trim();
-        if (r.assignments[mName]) return r.assignments[mName];
+        if (r.assignments[g.id]) return r.assignments[g.id];
+        const cleanId = g.id.replace(/^group-/, '');
+        if (r.assignments[cleanId]) return r.assignments[cleanId];
+        if (r.assignments[g.name]) return r.assignments[g.name];
         for (const [k, v] of Object.entries(r.assignments)) {
-          if (k.toLowerCase() === mName.toLowerCase() || k.toLowerCase() === m.id.toLowerCase()) {
+          if (k.toLowerCase() === g.name.toLowerCase() || k.toLowerCase() === g.id.toLowerCase() || k.toLowerCase() === cleanId.toLowerCase()) {
             return v;
           }
         }

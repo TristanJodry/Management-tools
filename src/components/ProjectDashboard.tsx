@@ -584,27 +584,25 @@ export default function ProjectDashboard({
     return finalRows;
   };
 
-  // Provide all team members if available, or stakeholder groups / default roles
+  // Provide stakeholder groups as columns in the RACI matrix
   const getRaciParticipants = () => {
-    const participants: { id: string; name: string; role: string; type: 'member' | 'group' }[] = [];
-    if (globalTeam && globalTeam.length > 0) {
-      globalTeam.forEach((m) => {
+    const participants: { id: string; name: string; role?: string; type: 'group' }[] = [];
+    if (stakeholderGroups && stakeholderGroups.length > 0) {
+      stakeholderGroups.forEach((g) => {
         participants.push({
-          id: m.id,
-          name: `${m.firstName} ${m.lastName || ''}`.trim(),
-          role: m.role || "Membre d'équipe",
-          type: 'member'
+          id: `group-${g.id}`,
+          name: g.name,
+          role: `${(g.stakeholders || []).length} membre(s)`,
+          type: 'group'
         });
       });
-    } else if (stakeholderGroups && stakeholderGroups.length > 0) {
-      stakeholderGroups.forEach((g) => {
-        participants.push({ id: `group-${g.id}`, name: g.name, role: 'Groupe', type: 'group' });
-      });
     } else {
+      // Default stakeholder groups if none defined yet
       participants.push(
-        { id: 'chef', name: 'Chef de Projet', role: 'Pilotage', type: 'member' },
-        { id: 'dev', name: 'Équipe Technique', role: 'Dév', type: 'member' },
-        { id: 'metier', name: 'Référent Métier', role: 'Business', type: 'member' }
+        { id: 'group-copil', name: 'Comité de Pilotage (COPIL)', type: 'group' },
+        { id: 'group-equipe', name: 'Équipe Projet / MOE', type: 'group' },
+        { id: 'group-metier', name: 'Direction Métier / MOA', type: 'group' },
+        { id: 'group-prestataire', name: 'Partenaires & Prestataires', type: 'group' }
       );
     }
     return participants;
@@ -612,27 +610,43 @@ export default function ProjectDashboard({
 
   // Resilient cell lookup (supports direct ID, name, clean ID, or normalized row match)
   const getRaciCellValue = (rowName: string, participantId: string, participantName: string): string => {
+    const cleanId = participantId.replace(/^group-/, '');
+    const searchKeys = [
+      participantId,
+      cleanId,
+      `group-${cleanId}`,
+      participantName
+    ];
+
     if (raciAssignments[rowName]) {
-      if (raciAssignments[rowName][participantId]) return raciAssignments[rowName][participantId];
-      if (raciAssignments[rowName][participantName]) return raciAssignments[rowName][participantName];
-      const cleanId = participantId.replace(/^group-/, '');
-      if (raciAssignments[rowName][cleanId]) return raciAssignments[rowName][cleanId];
-      if (raciAssignments[rowName][`group-${cleanId}`]) return raciAssignments[rowName][`group-${cleanId}`];
+      for (const k of searchKeys) {
+        if (raciAssignments[rowName][k]) return raciAssignments[rowName][k];
+      }
+      for (const [k, v] of Object.entries(raciAssignments[rowName])) {
+        if (
+          k.toLowerCase() === participantName.toLowerCase() ||
+          k.toLowerCase() === participantId.toLowerCase() ||
+          k.toLowerCase() === cleanId.toLowerCase()
+        ) {
+          return String(v);
+        }
+      }
     }
 
-    // Normalized search for legacy row keys (e.g., with ◆ or past differences)
-    const normTarget = rowName.replace(/^[◆■●★\s%Æ•\-\[\]]+/gu, '').replace(/^(Jalon|Tâche|Tache)\s*[:\-]?\s*/i, '').trim().toLowerCase();
+    // Normalized search for legacy row keys (e.g., with past symbols or differences)
+    const normTarget = normalizeRaciKey(rowName);
     for (const [rKey, rObj] of Object.entries(raciAssignments)) {
-      const normKey = rKey.replace(/^[◆■●★\s%Æ•\-\[\]]+/gu, '').replace(/^(Jalon|Tâche|Tache)\s*[:\-]?\s*/i, '').trim().toLowerCase();
-      if (normKey === normTarget && rObj) {
-        if (rObj[participantId]) return rObj[participantId];
-        if (rObj[participantName]) return rObj[participantName];
-        const cleanId = participantId.replace(/^group-/, '');
-        if (rObj[cleanId]) return rObj[cleanId];
-        if (rObj[`group-${cleanId}`]) return rObj[`group-${cleanId}`];
+      if (normalizeRaciKey(rKey) === normTarget && rObj) {
+        for (const k of searchKeys) {
+          if (rObj[k]) return rObj[k];
+        }
         for (const [k, v] of Object.entries(rObj)) {
-          if (k.toLowerCase() === participantName.toLowerCase() || k.toLowerCase() === participantId.toLowerCase()) {
-            return v;
+          if (
+            k.toLowerCase() === participantName.toLowerCase() ||
+            k.toLowerCase() === participantId.toLowerCase() ||
+            k.toLowerCase() === cleanId.toLowerCase()
+          ) {
+            return String(v);
           }
         }
       }
