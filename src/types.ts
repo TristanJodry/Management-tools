@@ -143,6 +143,10 @@ export interface RexItem {
   author: string;
   impact: 'low' | 'medium' | 'high';
   actionPlan?: string;
+  date?: string;
+  domain?: 'delai' | 'budget' | 'qualite' | 'communication' | 'technique' | 'organisation' | 'autre';
+  rating?: number; // 1 to 5 stars
+  isAnonymous?: boolean;
 }
 
 export interface ProjectDocumentItem {

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Project, RexItem } from '../types';
-import { HeartHandshake, Plus, Trash2, Edit3, CheckCircle2, AlertTriangle, Lightbulb, Download } from 'lucide-react';
+import { HeartHandshake, Plus, Trash2, Edit3, CheckCircle2, AlertTriangle, Lightbulb, Download, QrCode } from 'lucide-react';
 import { exportRexPDF } from '../utils/pdfExport';
+import RexQrCodeModal from './RexQrCodeModal';
 
 interface RexTabProps {
   project: Project;
@@ -13,6 +14,7 @@ export default function RexTab({ project, onUpdateProject, canEdit = true }: Rex
   const rexItems: RexItem[] = project.rexItems || [];
 
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
   const [category, setCategory] = useState<'success' | 'issue' | 'recommendation'>('success');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -37,7 +39,8 @@ export default function RexTab({ project, onUpdateProject, canEdit = true }: Rex
       description: description.trim(),
       author: author.trim() || 'Équipe Projet',
       impact,
-      actionPlan: actionPlan.trim()
+      actionPlan: actionPlan.trim(),
+      date: new Date().toISOString().split('T')[0]
     };
 
     saveRex([...rexItems, newR]);
@@ -81,10 +84,18 @@ export default function RexTab({ project, onUpdateProject, canEdit = true }: Rex
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={() => setShowQrModal(true)}
+            className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            title="Générer un QR Code pour recueillir des retours d'expérience"
+          >
+            <QrCode className="w-4 h-4" /> QR Code REX
+          </button>
+
           <button
             onClick={() => exportRexPDF(project)}
-            className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            className="px-3.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
             title="Télécharger le REX en PDF"
           >
             <Download className="w-4 h-4" /> Télécharger en PDF
@@ -425,6 +436,13 @@ export default function RexTab({ project, onUpdateProject, canEdit = true }: Rex
           </form>
         </div>
       )}
+
+      {/* QR Code Modal for this project */}
+      <RexQrCodeModal
+        project={project}
+        isOpen={showQrModal}
+        onClose={() => setShowQrModal(false)}
+      />
     </div>
   );
 }

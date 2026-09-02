@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Project, TeamMember, UserAccount, UserGroup, CommonTemplate } from './types';
+import { Project, TeamMember, UserAccount, UserGroup, CommonTemplate, RexItem } from './types';
 import { INITIAL_PROJECTS } from './data';
 import { DEFAULT_GROUPS, hasWritePermission } from './utils/permissions';
 import { ADMIN_CONFIG } from './config/adminConfig';
@@ -17,6 +17,7 @@ import LoginModal from './components/LoginModal';
 import UserProfileModal from './components/UserProfileModal';
 import ReferentielModal from './components/ReferentielModal';
 import TimeEatsLogo from './components/TimeEatsLogo';
+import RexPortal from './components/RexPortal';
 import { 
   FolderKanban, 
   Plus, 
@@ -38,12 +39,43 @@ import {
   UserCheck,
   Key,
   LogIn,
-  ChevronDown
+  ChevronDown,
+  QrCode
 } from 'lucide-react';
 
 export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  // REX Portal active state (detects /rex in path or search or hash)
+  const [isRexPortalActive, setIsRexPortalActive] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return (
+        window.location.pathname.startsWith('/rex') ||
+        window.location.hash.startsWith('#/rex') ||
+        window.location.search.includes('rex')
+      );
+    }
+    return false;
+  });
+
+  // Listen to popstate for URL navigation
+  useEffect(() => {
+    const checkRoute = () => {
+      const isRex = 
+        window.location.pathname.startsWith('/rex') ||
+        window.location.hash.startsWith('#/rex') ||
+        window.location.search.includes('rex');
+      setIsRexPortalActive(isRex);
+    };
+
+    window.addEventListener('popstate', checkRoute);
+    window.addEventListener('hashchange', checkRoute);
+    return () => {
+      window.removeEventListener('popstate', checkRoute);
+      window.removeEventListener('hashchange', checkRoute);
+    };
+  }, []);
 
   // RBAC & Auth state
   const [userGroups, setUserGroups] = useState<UserGroup[]>(DEFAULT_GROUPS);
@@ -303,12 +335,41 @@ export default function App() {
   // Selected project for detailed view
   const selectedProject = projects.find(p => p.id === selectedProjectId);
 
+  const handleAddRexItem = (projectId: string, rexItem: RexItem) => {
+    const updated = projects.map(p => {
+      if (p.id === projectId) {
+        const currentRex = p.rexItems || [];
+        return {
+          ...p,
+          rexItems: [rexItem, ...currentRex]
+        };
+      }
+      return p;
+    });
+    saveProjects(updated);
+    return true;
+  };
+
   const downloadTemplate = (title: string, size: string) => {
     alert(`Téléchargement du modèle de document : "${title}" (${size}) simulé avec succès.`);
   };
 
   const canManageProjects = hasWritePermission(currentUser, userGroups, 'project_management');
   const canSupervise = hasWritePermission(currentUser, userGroups, 'supervision');
+
+  // Public REX Submission Portal Route (Accessible via QR Code / URL without requiring login)
+  if (isRexPortalActive) {
+    return (
+      <RexPortal
+        projects={projects}
+        onAddRexItem={handleAddRexItem}
+        onExitPortal={() => {
+          setIsRexPortalActive(false);
+          window.history.pushState({}, '', '/');
+        }}
+      />
+    );
+  }
 
   // Full-screen Auth Guard: Lock access completely when logged out
   if (!currentUser) {
@@ -341,6 +402,20 @@ export default function App() {
             setCurrentUser(user);
           }}
         />
+
+        {/* Public REX Portal Shortcut */}
+        <div className="mt-8 text-center z-10">
+          <button
+            onClick={() => {
+              setIsRexPortalActive(true);
+              window.history.pushState({}, '', '/rex');
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-850 border border-slate-800 text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors shadow-sm cursor-pointer"
+          >
+            <QrCode className="w-4 h-4" />
+            Accéder au Portail REX Flash (app.homelabtj.fr/rex)
+          </button>
+        </div>
       </div>
     );
   }
@@ -423,6 +498,18 @@ export default function App() {
               title={isDarkMode ? "Passer en mode clair" : "Passer en mode sombre"}
             >
               {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-400" />}
+            </button>
+
+            <button
+              onClick={() => {
+                setIsRexPortalActive(true);
+                window.history.pushState({}, '', '/rex');
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-300 bg-indigo-950/60 hover:bg-indigo-900/80 hover:text-white rounded-xl border border-indigo-700/60 transition-all shadow-xs cursor-pointer"
+              title="Ouvrir le formulaire public de recueil REX"
+            >
+              <QrCode className="w-3.5 h-3.5 text-indigo-400" />
+              Portail REX
             </button>
 
             <button

@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Project, TeamMember } from '../types';
 import { exportPortfolioSupervisionPDF } from '../utils/pdfExport';
+import MasterGanttVisualizer from './MasterGanttVisualizer';
+import RexQrCodeModal from './RexQrCodeModal';
 import {
   Layers,
   FileDown,
@@ -22,7 +24,10 @@ import {
   UserCheck,
   AlertCircle,
   ExternalLink,
-  ChevronRight
+  ChevronRight,
+  CalendarDays,
+  QrCode,
+  Share2
 } from 'lucide-react';
 
 interface SupervisionPortfolioProps {
@@ -31,7 +36,7 @@ interface SupervisionPortfolioProps {
   onSelectProject: (project: Project) => void;
 }
 
-type SupervisionSubTab = 'overview' | 'financial' | 'resources' | 'milestones' | 'kpis' | 'risks';
+type SupervisionSubTab = 'overview' | 'master_gantt' | 'financial' | 'resources' | 'milestones' | 'kpis' | 'risks';
 
 export default function SupervisionPortfolio({
   projects,
@@ -44,6 +49,7 @@ export default function SupervisionPortfolio({
   const [managerFilter, setManagerFilter] = useState<string>('all');
   const [clientFilter, setClientFilter] = useState<string>('all');
   const [isExporting, setIsExporting] = useState(false);
+  const [isRexQrModalOpen, setIsRexQrModalOpen] = useState(false);
 
   // Format currency helper
   const formatEuro = (val: number) => {
@@ -367,8 +373,17 @@ export default function SupervisionPortfolio({
             </p>
           </div>
 
-          {/* Action Button: Generate Portfolio PDF */}
+          {/* Action Buttons: Generate Portfolio PDF & QR Code REX */}
           <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setIsRexQrModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 active:bg-white/30 text-white font-bold text-xs uppercase tracking-wider transition-all cursor-pointer border border-white/20"
+              title="Générer un QR Code pour recueillir des retours d'expérience"
+            >
+              <QrCode className="w-4 h-4 text-indigo-300" />
+              <span>QR Code REX Flash</span>
+            </button>
+
             <button
               onClick={handleExportPDF}
               disabled={isExporting}
@@ -425,6 +440,7 @@ export default function SupervisionPortfolio({
         <div className="flex flex-wrap gap-1.5">
           {[
             { id: 'overview', label: "Vue d'Ensemble & Synthèse", icon: BarChart3, count: filteredProjects.length },
+            { id: 'master_gantt', label: 'Master Gantt Consolidé', icon: CalendarDays, count: filteredProjects.length },
             { id: 'financial', label: 'Finances & Budget', icon: CircleDollarSign },
             { id: 'resources', label: 'Ressources & Charge (Workload)', icon: Users, count: teamWorkload.length },
             { id: 'milestones', label: 'Échéancier des Jalons', icon: Calendar, count: consolidatedMilestones.length },
@@ -718,6 +734,15 @@ export default function SupervisionPortfolio({
             )}
           </div>
         </div>
+      )}
+
+      {/* --- TAB: MASTER GANTT MULTI-PROJETS SUPERPOSÉ --- */}
+      {activeSubTab === 'master_gantt' && (
+        <MasterGanttVisualizer
+          projects={filteredProjects}
+          globalTeam={globalTeam}
+          onSelectProject={onSelectProject}
+        />
       )}
 
       {/* --- TAB B: FINANCIAL & BUDGET --- */}
@@ -1159,6 +1184,13 @@ export default function SupervisionPortfolio({
           </div>
         </div>
       )}
+
+      {/* REX QR Code Modal */}
+      <RexQrCodeModal
+        isOpen={isRexQrModalOpen}
+        onClose={() => setIsRexQrModalOpen(false)}
+        projects={projects}
+      />
     </div>
   );
 }

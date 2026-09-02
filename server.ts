@@ -543,6 +543,44 @@ app.post('/api/projects', (req, res) => {
   }
 });
 
+app.post('/api/rex/submit', (req, res) => {
+  const { projectId, category, title, description, author, impact, actionPlan, rating, domain, isAnonymous, date } = req.body;
+  if (!projectId || !title) {
+    return res.status(400).json({ error: 'projectId et title sont requis' });
+  }
+
+  const projects = getAllProjects();
+  const projIndex = projects.findIndex((p) => p.id === projectId);
+  if (projIndex === -1) {
+    return res.status(404).json({ error: 'Projet introuvable' });
+  }
+
+  const newRex = {
+    id: `rex-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    category: category || 'success',
+    title: String(title).trim(),
+    description: String(description || '').trim(),
+    author: isAnonymous ? 'Anonyme' : (String(author || '').trim() || 'Contributeur'),
+    impact: impact || 'medium',
+    actionPlan: String(actionPlan || '').trim(),
+    date: date || new Date().toISOString().split('T')[0],
+    domain: domain || 'autre',
+    rating: typeof rating === 'number' ? rating : undefined,
+    isAnonymous: Boolean(isAnonymous)
+  };
+
+  if (!projects[projIndex].rexItems) {
+    projects[projIndex].rexItems = [];
+  }
+  projects[projIndex].rexItems.unshift(newRex);
+
+  if (saveProjectsToDb(projects)) {
+    res.json({ success: true, rexItem: newRex, project: projects[projIndex] });
+  } else {
+    res.status(500).json({ error: 'Échec de l\'enregistrement du REX' });
+  }
+});
+
 app.post('/api/team', (req, res) => {
   const { globalTeam } = req.body;
   if (!Array.isArray(globalTeam)) {
