@@ -1809,3 +1809,647 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
   doc.save(`${project.id || 'projet'}_Synthese_Executive.pdf`);
 }
 
+// 12. EXPORT SUPERVISION DE PORTEFEUILLE PROJETS (SPP - GLOBAL)
+export function exportPortfolioSupervisionPDF(
+  projects: Project[],
+  globalTeam: TeamMember[] = [],
+  filterTitle: string = 'Ensemble des projets'
+) {
+  const doc = new jsPDF('p', 'mm', 'a4');
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const contentWidth = pageWidth - 28;
+  let currentY = 36;
+
+  // Header banner for Portfolio
+  const addPortfolioHeader = (tabLabel: string) => {
+    doc.setFillColor(15, 23, 42); // Slate 900
+    doc.rect(0, 0, pageWidth, 26, 'F');
+    doc.setFillColor(99, 102, 241); // Indigo 500
+    doc.rect(0, 26, pageWidth, 2, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text("Time'EATS • SUPERVISION DE PORTEFEUILLE PROJETS (SPP)", 14, 11);
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(226, 232, 240);
+    doc.text(
+      `Rapport de Pilotage & Contrôle Stratégique • ${sanitizePdfText(tabLabel)} • Périmètre : ${sanitizePdfText(filterTitle)}`,
+      14,
+      19
+    );
+
+    const today = new Date().toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    doc.setFontSize(7.5);
+    doc.text(`Édité le : ${today} | ${projects.length} projets`, pageWidth - 14, 19, { align: 'right' });
+    doc.setTextColor(30, 41, 59);
+  };
+
+  const addPortfolioFooter = () => {
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    const today = new Date().toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.line(14, pageHeight - 12, pageWidth - 14, pageHeight - 12);
+
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      doc.text("Direction des Systèmes & Portefeuille Projets • Time'EATS SPP", 14, pageHeight - 7);
+      doc.text(
+        `Document Confidentiel • Généré le ${today} • Page ${i} / ${pageCount}`,
+        pageWidth - 14,
+        pageHeight - 7,
+        { align: 'right' }
+      );
+    }
+  };
+
+  const checkPageBreak = (requiredHeight: number) => {
+    if (currentY + requiredHeight > pageHeight - 16) {
+      doc.addPage();
+      addPortfolioHeader('Rapport de Supervision Consolidé');
+      currentY = 34;
+    }
+  };
+
+  const drawSectionHeader = (title: string, badge?: string) => {
+    checkPageBreak(14);
+    doc.setFillColor(241, 245, 249); // Slate 100
+    doc.roundedRect(14, currentY, contentWidth, 7, 1.5, 1.5, 'F');
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59); // Slate 800
+    doc.text(sanitizePdfText(title), 18, currentY + 4.8);
+
+    if (badge) {
+      doc.setFontSize(7);
+      doc.setTextColor(79, 70, 229);
+      doc.text(sanitizePdfText(badge), pageWidth - 18, currentY + 4.8, { align: 'right' });
+    }
+    currentY += 10;
+  };
+
+  // 1. Initial Page Setup
+  addPortfolioHeader('Synthèse Globale du Portefeuille');
+
+  // Aggregated KPIs calculation
+  const totalProjects = projects.length;
+  const activeProjects = projects.filter((p) => p.status === 'active').length;
+  const delayedProjects = projects.filter((p) => p.status === 'delayed').length;
+  const problemProjects = projects.filter((p) => p.status === 'problem').length;
+  const closedProjects = projects.filter((p) => p.status === 'closed').length;
+
+  const totalBudgetAllocated = projects.reduce((acc, p) => acc + (p.budget || 0), 0);
+  const totalBudgetSpent = projects.reduce((acc, p) => acc + (p.spentBudget || 0), 0);
+  const totalBudgetRemaining = totalBudgetAllocated - totalBudgetSpent;
+  const budgetBurnRate = totalBudgetAllocated > 0 ? Math.round((totalBudgetSpent / totalBudgetAllocated) * 100) : 0;
+
+  // Average progress & quality
+  const avgProgress =
+    totalProjects > 0
+      ? Math.round(
+          projects.reduce((acc, p) => {
+            const completed = p.tasksCompleted || 0;
+            const total = p.tasksTotal || 1;
+            return acc + (completed / (total > 0 ? total : 1)) * 100;
+          }, 0) / totalProjects
+        )
+      : 0;
+
+  const avgQuality =
+    totalProjects > 0
+      ? Math.round(projects.reduce((acc, p) => acc + (p.qualityIndex || 100), 0) / totalProjects)
+      : 100;
+
+  // Section 1: Executive KPI Cards Grid
+  drawSectionHeader('1. Indicateurs Clés de Pilotage du Portefeuille (Executive KPIs)', 'Vue Stratégique');
+
+  const cardWidth = (contentWidth - 6) / 3;
+  const cardHeight = 16;
+
+  const kpiCards = [
+    {
+      title: 'PROJETS & SANTÉ',
+      val: `${activeProjects} Actifs | ${delayedProjects} Retards | ${problemProjects} Alertes`,
+      sub: `Total: ${totalProjects} projets (${closedProjects} clôturés)`,
+      fill: [238, 242, 255],
+      stroke: [199, 210, 254],
+      textCol: [67, 56, 202]
+    },
+    {
+      title: 'BUDGET CONSOLIDÉ',
+      val: `${formatEuro(totalBudgetSpent)} / ${formatEuro(totalBudgetAllocated)}`,
+      sub: `Conso: ${budgetBurnRate}% • Solde: ${formatEuro(totalBudgetRemaining)}`,
+      fill: [240, 253, 244],
+      stroke: [187, 247, 208],
+      textCol: [22, 101, 52]
+    },
+    {
+      title: 'AVANCEMENT & QUALITÉ',
+      val: `Avancement: ${avgProgress}% • Qualité: ${avgQuality}%`,
+      sub: 'Moyenne pondérée des livrables',
+      fill: [254, 243, 199],
+      stroke: [253, 230, 138],
+      textCol: [146, 64, 14]
+    }
+  ];
+
+  kpiCards.forEach((c, idx) => {
+    const x = 14 + idx * (cardWidth + 3);
+    doc.setFillColor(c.fill[0], c.fill[1], c.fill[2]);
+    doc.setDrawColor(c.stroke[0], c.stroke[1], c.stroke[2]);
+    doc.roundedRect(x, currentY, cardWidth, cardHeight, 1.5, 1.5, 'FD');
+
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(c.textCol[0], c.textCol[1], c.textCol[2]);
+    doc.text(c.title, x + 3, currentY + 4);
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(c.val, x + 3, currentY + 9.5);
+
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text(c.sub, x + 3, currentY + 13.5);
+  });
+
+  currentY += cardHeight + 6;
+
+  // Section 2: Tableau Détaillé du Portefeuille
+  drawSectionHeader('2. Matrice Synthétique de Tous les Projets du Portefeuille', `${projects.length} Lignes`);
+
+  const projectTableRows = projects.map((p) => {
+    const tasksDone = p.tasksCompleted || 0;
+    const tasksTot = p.tasksTotal || 0;
+    const pctProg = tasksTot > 0 ? Math.round((tasksDone / tasksTot) * 100) : 0;
+    const spent = p.spentBudget || 0;
+    const bud = p.budget || 0;
+    const solde = bud - spent;
+    const burn = bud > 0 ? Math.round((spent / bud) * 100) : 0;
+
+    return [
+      sanitizePdfText(p.name),
+      sanitizePdfText(p.manager || 'N/A'),
+      sanitizePdfText(p.clientName || 'N/A'),
+      getStatusLabel(p.status),
+      `${p.prioritizationScore || 0}/100`,
+      `${pctProg}% (${tasksDone}/${tasksTot})`,
+      `${formatEuro(bud)}`,
+      `${formatEuro(spent)} (${burn}%)`,
+      `${formatEuro(solde)}`,
+      `${p.qualityIndex || 100}%`
+    ];
+  });
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [
+      [
+        'Projet',
+        'Chef de Projet',
+        'Client / Dpt',
+        'Statut',
+        'Priorité',
+        'Avancement',
+        'Budget Alloué',
+        'Consommé',
+        'Solde',
+        'Qualité'
+      ]
+    ],
+    body: projectTableRows,
+    headStyles: {
+      fillColor: [30, 41, 59],
+      textColor: 255,
+      fontStyle: 'bold',
+      fontSize: 7,
+      halign: 'left'
+    },
+    styles: {
+      fontSize: 6.8,
+      cellPadding: 2,
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2
+    },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: 34 },
+      1: { cellWidth: 22 },
+      2: { cellWidth: 20 },
+      3: { cellWidth: 18, fontStyle: 'bold' },
+      4: { halign: 'center', cellWidth: 13 },
+      5: { halign: 'center', cellWidth: 18 },
+      6: { halign: 'right', cellWidth: 17 },
+      7: { halign: 'right', cellWidth: 20 },
+      8: { halign: 'right', cellWidth: 17 },
+      9: { halign: 'center', cellWidth: 13 }
+    },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.column.index === 3) {
+        const val = String(data.cell.raw || '');
+        if (val.includes('retard') || val.includes('En retard')) {
+          data.cell.styles.textColor = [180, 83, 9];
+        } else if (val.includes('Alerte') || val.includes('Bloqué')) {
+          data.cell.styles.textColor = [225, 29, 72];
+        } else if (val.includes('Clôturé')) {
+          data.cell.styles.textColor = [22, 101, 52];
+        } else {
+          data.cell.styles.textColor = [2, 132, 199];
+        }
+      }
+    },
+    margin: { left: 14, right: 14 }
+  });
+
+  currentY = (doc as any).lastAutoTable.finalY + 7;
+
+  // Section 3: Allocation des Ressources & Charge de Travail Consolidée
+  drawSectionHeader('3. Charge de Travail & Mobilisation des Ressources Humaines', 'Transversal');
+
+  // Compute workload per team member
+  type MemberWorkload = {
+    id: string;
+    name: string;
+    role: string;
+    assignedProjects: Set<string>;
+    totalTasks: number;
+    completedTasks: number;
+    totalDays: number;
+  };
+
+  const workloadMap: Record<string, MemberWorkload> = {};
+
+  // Initialize with global team
+  globalTeam.forEach((tm) => {
+    workloadMap[tm.id] = {
+      id: tm.id,
+      name: `${tm.firstName || ''} ${tm.lastName || ''}`.trim() || tm.id,
+      role: tm.role || 'Collaborateur',
+      assignedProjects: new Set(),
+      totalTasks: 0,
+      completedTasks: 0,
+      totalDays: 0
+    };
+  });
+
+  // Aggregate from all projects' Gantt phases & items
+  projects.forEach((proj) => {
+    (proj.ganttPhases || []).forEach((phase) => {
+      (phase.items || []).forEach((item) => {
+        (item.assignedTo || []).forEach((assigneeId) => {
+          if (!workloadMap[assigneeId]) {
+            const foundTm = globalTeam.find((g) => g.id === assigneeId);
+            workloadMap[assigneeId] = {
+              id: assigneeId,
+              name: foundTm ? `${foundTm.firstName} ${foundTm.lastName || ''}`.trim() : assigneeId,
+              role: foundTm?.role || 'Membre projet',
+              assignedProjects: new Set(),
+              totalTasks: 0,
+              completedTasks: 0,
+              totalDays: 0
+            };
+          }
+          workloadMap[assigneeId].assignedProjects.add(proj.name);
+          workloadMap[assigneeId].totalTasks += 1;
+          if (item.completed || item.progress === 100) {
+            workloadMap[assigneeId].completedTasks += 1;
+          }
+          workloadMap[assigneeId].totalDays += item.estimatedDays || 1;
+        });
+      });
+    });
+  });
+
+  const workloadRows = Object.values(workloadMap)
+    .filter((w) => w.totalTasks > 0 || w.assignedProjects.size > 0)
+    .map((w) => {
+      const projCount = w.assignedProjects.size;
+      const progressPct = w.totalTasks > 0 ? Math.round((w.completedTasks / w.totalTasks) * 100) : 0;
+      const loadAlert = w.totalTasks > 12 || projCount >= 3 ? 'Charge Élevée (Vigilance)' : 'Normale';
+
+      return [
+        sanitizePdfText(w.name),
+        sanitizePdfText(w.role),
+        `${projCount} projet(s)`,
+        `${w.totalTasks} tâche(s)`,
+        `${w.totalDays} j/h`,
+        `${progressPct}% (${w.completedTasks}/${w.totalTasks})`,
+        loadAlert
+      ];
+    });
+
+  if (workloadRows.length > 0) {
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Collaborateur', 'Rôle / Métier', 'Projets Affectés', 'Tâches Assignées', 'Charge Estimée', 'Avancement', 'Niveau de Charge']],
+      body: workloadRows,
+      headStyles: {
+        fillColor: [79, 70, 229],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 7
+      },
+      styles: {
+        fontSize: 6.8,
+        cellPadding: 2,
+        lineColor: [226, 232, 240],
+        lineWidth: 0.2
+      },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 38 },
+        1: { cellWidth: 28 },
+        2: { halign: 'center', cellWidth: 22 },
+        3: { halign: 'center', cellWidth: 22 },
+        4: { halign: 'center', cellWidth: 20 },
+        5: { halign: 'center', cellWidth: 22 },
+        6: { halign: 'center', fontStyle: 'bold' }
+      },
+      margin: { left: 14, right: 14 }
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 7;
+  } else {
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(148, 163, 184);
+    doc.text('Aucune ressource affectée sur les plannings des projets pour le moment.', 18, currentY);
+    currentY += 7;
+  }
+
+  // Section 4: Prochains Jalons & Échéancier Critique Global
+  drawSectionHeader('4. Échéancier Consolidé des Jalons & Livrables Clés', 'Planning Master');
+
+  type MilestoneEntry = {
+    projectName: string;
+    manager: string;
+    name: string;
+    endDate: string;
+    progress: number;
+    completed: boolean;
+  };
+
+  const allMilestones: MilestoneEntry[] = [];
+  projects.forEach((p) => {
+    (p.ganttPhases || []).forEach((ph) => {
+      (ph.items || []).forEach((it) => {
+        if (it.type === 'milestone') {
+          allMilestones.push({
+            projectName: p.name,
+            manager: p.manager || 'N/A',
+            name: it.name,
+            endDate: it.endDate,
+            progress: it.progress || 0,
+            completed: Boolean(it.completed || it.progress === 100)
+          });
+        }
+      });
+    });
+  });
+
+  // Sort by date
+  allMilestones.sort((a, b) => new Date(a.endDate || '2099-01-01').getTime() - new Date(b.endDate || '2099-01-01').getTime());
+
+  const milestoneRows = allMilestones.slice(0, 15).map((m) => {
+    const isPast = m.endDate ? new Date(m.endDate).getTime() < new Date().setHours(0, 0, 0, 0) : false;
+    let statusLabel = 'À venir';
+    if (m.completed) {
+      statusLabel = 'Franchi / Validé';
+    } else if (isPast) {
+      statusLabel = 'En Retard';
+    }
+
+    const dateFormatted = m.endDate ? new Date(m.endDate).toLocaleDateString('fr-FR') : 'Non planifié';
+
+    return [
+      sanitizePdfText(m.projectName),
+      sanitizePdfText(m.name),
+      dateFormatted,
+      sanitizePdfText(m.manager),
+      `${m.progress}%`,
+      statusLabel
+    ];
+  });
+
+  if (milestoneRows.length > 0) {
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Projet', 'Jalon / Livrable Majeur', 'Date Échéance', 'Chef de Projet', 'Avancement', 'État']],
+      body: milestoneRows,
+      headStyles: {
+        fillColor: [67, 56, 202],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 7
+      },
+      styles: {
+        fontSize: 6.8,
+        cellPadding: 2,
+        lineColor: [226, 232, 240],
+        lineWidth: 0.2
+      },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 42 },
+        1: { cellWidth: 50 },
+        2: { halign: 'center', cellWidth: 24 },
+        3: { cellWidth: 26 },
+        4: { halign: 'center', cellWidth: 16 },
+        5: { halign: 'center', fontStyle: 'bold' }
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 5) {
+          const val = String(data.cell.raw || '');
+          if (val.includes('Retard')) {
+            data.cell.styles.textColor = [225, 29, 72];
+          } else if (val.includes('Franchi')) {
+            data.cell.styles.textColor = [22, 101, 52];
+          } else {
+            data.cell.styles.textColor = [79, 70, 229];
+          }
+        }
+      },
+      margin: { left: 14, right: 14 }
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 7;
+  } else {
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(148, 163, 184);
+    doc.text('Aucun jalon spécifique répertorié dans les plannings du portefeuille.', 18, currentY);
+    currentY += 7;
+  }
+
+  // Section 5: Registre des Risques Majeurs & Points Critiques
+  drawSectionHeader('5. Cartographie des Risques Majeurs & Points de Blocage', 'Gouvernance & Alertes');
+
+  type ConsolidatedRisk = {
+    projectName: string;
+    desc: string;
+    score: number;
+    mitigation: string;
+    owner?: string;
+  };
+
+  const consolidatedRisks: ConsolidatedRisk[] = [];
+  projects.forEach((p) => {
+    const list = p.risksRegister || p.risks || [];
+    list.forEach((r) => {
+      const score = (r.prob || 1) * (r.impact || 1);
+      consolidatedRisks.push({
+        projectName: p.name,
+        desc: r.desc || 'Risque non documenté',
+        score,
+        mitigation: r.mitigation || 'Mesures en attente d’arbitrage',
+        owner: r.owner || p.manager || 'Équipe'
+      });
+    });
+  });
+
+  consolidatedRisks.sort((a, b) => b.score - a.score);
+
+  const riskRows = consolidatedRisks.slice(0, 10).map((r) => {
+    let criticite = 'Faible';
+    if (r.score >= 15) criticite = 'Critique (Rouge)';
+    else if (r.score >= 9) criticite = 'Majeur (Orange)';
+    else if (r.score >= 4) criticite = 'Modéré (Jaune)';
+
+    return [
+      sanitizePdfText(r.projectName),
+      sanitizePdfText(r.desc),
+      `Score ${r.score} (${criticite})`,
+      sanitizePdfText(r.mitigation),
+      sanitizePdfText(r.owner || 'N/A')
+    ];
+  });
+
+  if (riskRows.length > 0) {
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Projet', 'Description du Risque / Menace', 'Criticité (P x I)', 'Plan de Prévention & Mitigation', 'Pilote']],
+      body: riskRows,
+      headStyles: {
+        fillColor: [180, 83, 9],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 7
+      },
+      styles: {
+        fontSize: 6.8,
+        cellPadding: 2,
+        lineColor: [226, 232, 240],
+        lineWidth: 0.2
+      },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 38 },
+        1: { cellWidth: 50 },
+        2: { halign: 'center', cellWidth: 28, fontStyle: 'bold' },
+        3: { cellWidth: 44 },
+        4: { cellWidth: 22 }
+      },
+      margin: { left: 14, right: 14 }
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 7;
+  } else {
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(148, 163, 184);
+    doc.text('Aucun risque majeur signalé sur les projets du portefeuille.', 18, currentY);
+    currentY += 7;
+  }
+
+  // Section 6: Indicateurs de Performance (KPIs) Consolidés
+  drawSectionHeader('6. Performance Qualité & Scorecard KPIs du Portefeuille', 'Pilotage');
+
+  type ConsolidatedKpi = {
+    projectName: string;
+    kpiName: string;
+    target: string;
+    current: string;
+    scoreVal: number;
+    statusBadge: string;
+  };
+
+  const consolidatedKpis: ConsolidatedKpi[] = [];
+  projects.forEach((p) => {
+    (p.kpis || []).forEach((k) => {
+      const scoreVal = k.status ?? (k.statusScore === 'ok' ? 100 : k.statusScore === 'warning' ? 50 : 25);
+      const statusBadge = scoreVal >= 80 ? 'Conforme' : scoreVal >= 50 ? 'Vigilance' : 'Alerte';
+      consolidatedKpis.push({
+        projectName: p.name,
+        kpiName: k.name,
+        target: k.targetValue || '-',
+        current: k.currentValue || '-',
+        scoreVal,
+        statusBadge
+      });
+    });
+  });
+
+  const kpiRows = consolidatedKpis.slice(0, 12).map((k) => [
+    sanitizePdfText(k.projectName),
+    sanitizePdfText(k.kpiName),
+    sanitizePdfText(k.target),
+    sanitizePdfText(k.current),
+    `${k.scoreVal}%`,
+    k.statusBadge
+  ]);
+
+  if (kpiRows.length > 0) {
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Projet', 'Indicateur Clé (KPI)', 'Valeur Cible', 'Valeur Actuelle', 'Taux Atteinte', 'Statut']],
+      body: kpiRows,
+      headStyles: {
+        fillColor: [30, 41, 59],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 7
+      },
+      styles: {
+        fontSize: 6.8,
+        cellPadding: 2,
+        lineColor: [226, 232, 240],
+        lineWidth: 0.2
+      },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 40 },
+        1: { cellWidth: 46 },
+        2: { halign: 'center', cellWidth: 26 },
+        3: { halign: 'center', cellWidth: 26 },
+        4: { halign: 'center', cellWidth: 20, fontStyle: 'bold' },
+        5: { halign: 'center', fontStyle: 'bold' }
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 5) {
+          const val = String(data.cell.raw || '');
+          if (val.includes('Alerte')) data.cell.styles.textColor = [225, 29, 72];
+          else if (val.includes('Conforme')) data.cell.styles.textColor = [22, 101, 52];
+          else data.cell.styles.textColor = [180, 83, 9];
+        }
+      },
+      margin: { left: 14, right: 14 }
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 7;
+  }
+
+  addPortfolioFooter();
+  doc.save('Supervision_Portefeuille_Projets_SPP.pdf');
+}
+

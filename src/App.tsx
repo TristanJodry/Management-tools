@@ -308,6 +308,7 @@ export default function App() {
   };
 
   const canManageProjects = hasWritePermission(currentUser, userGroups, 'project_management');
+  const canSupervise = hasWritePermission(currentUser, userGroups, 'supervision');
 
   // Full-screen Auth Guard: Lock access completely when logged out
   if (!currentUser) {
@@ -488,8 +489,10 @@ export default function App() {
                 
                 <ProjectTable
                   projects={projects}
+                  globalTeam={globalTeam}
                   canEdit={canManageProjects}
                   canDelete={canManageProjects}
+                  canSupervise={canSupervise}
                   onSelectProject={(p) => setSelectedProjectId(p.id)}
                   onEditProject={(p) => {
                     setEditingProject(p);

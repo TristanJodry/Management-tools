@@ -41,7 +41,8 @@ export default function UserManagementModal({
     documents: false,
     closure: false,
     templates: false,
-    manage_templates: false
+    manage_templates: false,
+    supervision: false
   });
 
   // State for adding/editing user
@@ -76,7 +77,8 @@ export default function UserManagementModal({
       documents: true,
       closure: true,
       templates: true,
-      manage_templates: true
+      manage_templates: true,
+      supervision: true
     };
     setGroupPermissions(defaultPerms);
   };

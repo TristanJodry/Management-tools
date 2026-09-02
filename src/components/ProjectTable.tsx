@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Project, ProjectStatus } from '../types';
+import { Project, ProjectStatus, TeamMember } from '../types';
 import { 
   Search, 
   User, 
@@ -18,30 +18,37 @@ import {
   AlertTriangle, 
   AlertOctagon,
   HelpCircle,
-  FileCheck
+  FileCheck,
+  Layers,
+  Lock
 } from 'lucide-react';
 import { computeProjectAlerts } from './ProjectAlertsBanner';
+import SupervisionPortfolio from './SupervisionPortfolio';
 
 interface ProjectTableProps {
   projects: Project[];
+  globalTeam?: TeamMember[];
   onSelectProject: (project: Project) => void;
   onEditProject: (project: Project) => void;
   onDeleteProject: (projectId: string) => void;
   canEdit?: boolean;
   canDelete?: boolean;
+  canSupervise?: boolean;
 }
 
 export default function ProjectTable({ 
   projects, 
+  globalTeam = [],
   onSelectProject, 
   onEditProject, 
   onDeleteProject,
   canEdit = true,
-  canDelete = true
+  canDelete = true,
+  canSupervise = true
 }: ProjectTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'archived' | 'supervision'>('active');
 
   // Filter projects by tab (active vs archived/closed)
   const currentTabProjects = projects.filter((p) => {
@@ -133,28 +140,54 @@ export default function ProjectTable({
       <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850">
         <button
           onClick={() => { setActiveTab('active'); setStatusFilter('all'); }}
-          className={`flex-1 py-3 px-6 text-sm font-semibold border-b-2 transition-colors flex items-center justify-center gap-2 ${
+          className={`flex-1 py-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition-colors flex items-center justify-center gap-2 ${
             activeTab === 'active' 
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' 
+              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 shadow-xs' 
               : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/50 dark:hover:bg-slate-800/50'
           }`}
         >
           <TrendingUp className="w-4 h-4" />
-          Projets Actifs ({projects.filter(p => p.status !== 'closed').length})
+          <span>Projets Actifs ({projects.filter(p => p.status !== 'closed').length})</span>
         </button>
         <button
           onClick={() => { setActiveTab('archived'); setStatusFilter('all'); }}
-          className={`flex-1 py-3 px-6 text-sm font-semibold border-b-2 transition-colors flex items-center justify-center gap-2 ${
+          className={`flex-1 py-3 px-4 text-xs sm:text-sm font-semibold border-b-2 transition-colors flex items-center justify-center gap-2 ${
             activeTab === 'archived' 
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' 
+              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 shadow-xs' 
               : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/50 dark:hover:bg-slate-800/50'
           }`}
         >
           <FileCheck className="w-4 h-4" />
-          Projets Archivés / Clos ({projects.filter(p => p.status === 'closed').length})
+          <span>Projets Archivés ({projects.filter(p => p.status === 'closed').length})</span>
         </button>
+        {canSupervise && (
+          <button
+            onClick={() => setActiveTab('supervision')}
+            className={`flex-1 py-3 px-4 text-xs sm:text-sm font-bold border-b-2 transition-colors flex items-center justify-center gap-2 ${
+              activeTab === 'supervision' 
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 shadow-xs' 
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/50 dark:hover:bg-slate-800/50'
+            }`}
+          >
+            <Layers className="w-4 h-4 text-indigo-500" />
+            <span>Supervision (SPP)</span>
+            <span className="text-[10px] uppercase font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 px-1.5 py-0.5 rounded font-mono">
+              Portefeuille
+            </span>
+          </button>
+        )}
       </div>
 
+      {activeTab === 'supervision' ? (
+        <div className="p-6">
+          <SupervisionPortfolio
+            projects={projects}
+            globalTeam={globalTeam}
+            onSelectProject={onSelectProject}
+          />
+        </div>
+      ) : (
+        <>
       {/* Filtering Controls */}
       <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row gap-3 justify-between items-center">
         {/* Search Input */}
@@ -394,6 +427,8 @@ export default function ProjectTable({
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
   );
 }

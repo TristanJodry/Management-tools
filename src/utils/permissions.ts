@@ -75,6 +75,11 @@ export const MODULE_LABELS: Record<ModuleKey, { label: string; description: stri
     label: 'Référentiel Commun (Gestion & Modification)',
     description: 'Ajout, modification et suppression des modèles dans le référentiel',
     category: 'Ressources'
+  },
+  supervision: {
+    label: 'Supervision de Portefeuille (SPP)',
+    description: 'Accès à l’onglet Supervision SPP, statistiques globales multi-projets et génération des rapports de pilotage consolidés',
+    category: 'Supervision'
   }
 };
 

@@ -251,7 +251,8 @@ export type ModuleKey =
   | 'documents'
   | 'closure'
   | 'templates'
-  | 'manage_templates';
+  | 'manage_templates'
+  | 'supervision';
 
 export interface UserGroup {
   id: string;
