@@ -247,6 +247,7 @@ export type ModuleKey =
   | 'project_management'
   | 'team_management'
   | 'charter'
+  | 'wbs'
   | 'gantt'
   | 'workload'
   | 'budget'

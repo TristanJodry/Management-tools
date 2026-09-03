@@ -16,6 +16,11 @@ export const MODULE_LABELS: Record<ModuleKey, { label: string; description: stri
     description: 'Parties prenantes, matrice RACI et charte d’équipe',
     category: 'Cadrage'
   },
+  wbs: {
+    label: 'Matrice WBS (Découpage des Travaux)',
+    description: 'Création et structuration des phases, tâches et jalons clés',
+    category: 'Planification'
+  },
   gantt: {
     label: 'Planning Gantt & Livrables',
     description: 'Création, modification des tâches, jalons et prédécesseurs',
@@ -94,5 +99,9 @@ export function hasWritePermission(
   if (user.isAdmin) return true;
 
   const userGroups = groups.filter((g) => user.groupIds?.includes(g.id));
-  return userGroups.some((g) => g.permissions?.[moduleKey] === true);
+  return userGroups.some((g) => {
+    if (g.permissions?.[moduleKey] === true) return true;
+    if (moduleKey === 'wbs' && g.permissions?.['gantt'] === true) return true;
+    return false;
+  });
 }

@@ -310,7 +310,101 @@ export function exportDecisionMatrixPDF(project: Project) {
   doc.save(`${project.id || 'projet'}_matrice_decision.pdf`);
 }
 
-// 3. Export Planification & Diagramme de Gantt PDF
+// 3. Export Matrice WBS (Work Breakdown Structure) PDF
+export function exportWbsPDF(project: Project) {
+  const doc = new jsPDF('p', 'mm', 'a4'); // Portrait A4
+  addPdfHeader(doc, project, 'Matrice WBS (Organigramme des Tâches)');
+
+  let currentY = 35;
+  const phases = project.ganttPhases || [];
+
+  let totalTasks = 0;
+  let totalMilestones = 0;
+  phases.forEach((p) => {
+    (p.items || []).forEach((it) => {
+      if (it.type === 'milestone') totalMilestones++;
+      else totalTasks++;
+    });
+  });
+
+  // Summary Metrics Card
+  doc.setFillColor(241, 245, 249);
+  doc.roundedRect(14, currentY, 182, 10, 2, 2, 'F');
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 41, 59);
+  doc.text(`Phases majeures (Lots N1) : ${phases.length}`, 18, currentY + 6.2);
+  doc.text(`Taches (N2) : ${totalTasks}`, 85, currentY + 6.2);
+  doc.text(`Jalons cles (N2) : ${totalMilestones}`, 145, currentY + 6.2);
+
+  currentY += 15;
+
+  const tableData: any[] = [];
+  phases.forEach((phase, pIdx) => {
+    const phaseCode = `${pIdx + 1}.0`;
+    tableData.push([
+      {
+        content: `WBS ${phaseCode} : ${sanitizePdfText(phase.name.toUpperCase())}`,
+        colSpan: 3,
+        styles: {
+          fillColor: [30, 41, 59],
+          textColor: [251, 191, 36],
+          fontStyle: 'bold',
+          fontSize: 8
+        }
+      }
+    ]);
+
+    const items = phase.items || [];
+    if (items.length === 0) {
+      tableData.push([
+        `${phaseCode}.1`,
+        'Aucune tache ou jalon defini dans cette phase',
+        '-'
+      ]);
+    } else {
+      items.forEach((item, iIdx) => {
+        const itemCode = `${pIdx + 1}.${iIdx + 1}`;
+        const isMilestone = item.type === 'milestone';
+        const typeLabel = isMilestone ? 'Jalon cle (Milestone)' : 'Tache';
+
+        tableData.push([
+          itemCode,
+          isMilestone ? `[JALON] ${sanitizePdfText(item.name)}` : sanitizePdfText(item.name),
+          typeLabel
+        ]);
+      });
+    }
+  });
+
+  if (tableData.length === 0) {
+    tableData.push(['-', 'Aucune phase WBS enregistree', '-']);
+  }
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['Code WBS', 'Element / Intitule', 'Type']],
+    headStyles: {
+      fillColor: [67, 56, 202],
+      textColor: 255,
+      fontStyle: 'bold',
+      fontSize: 8
+    },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    styles: { fontSize: 7.5, cellPadding: 2.5 },
+    columnStyles: {
+      0: { cellWidth: 30, fontStyle: 'bold', halign: 'center' },
+      1: { cellWidth: 105 },
+      2: { cellWidth: 47 }
+    },
+    margin: { left: 14, right: 14 }
+  });
+
+  addPdfFooter(doc, project, 'Matrice WBS');
+  doc.save(`${project.id || 'projet'}_matrice_wbs.pdf`);
+}
+
+// 4. Export Planification & Diagramme de Gantt PDF
 export function exportPlanificationPDF(project: Project, globalTeam: TeamMember[] = []) {
   const doc = new jsPDF('l', 'mm', 'a4'); // Landscape A4 (297 x 210 mm)
   addPdfHeader(doc, project, 'Planification & Diagramme de Gantt', 'l');

@@ -131,6 +131,20 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
     };
   };
 
+  // Determine if there is at least one task with both date and assigned person
+  const hasPlannedTaskWithDateAndAssignee = useMemo(() => {
+    return safePhases.some((phase) =>
+      (phase.items || []).some(
+        (item) =>
+          Boolean(
+            (item.startDate?.trim() || item.endDate?.trim()) &&
+            item.assignedTo &&
+            item.assignedTo.length > 0
+          )
+      )
+    );
+  }, [safePhases]);
+
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-800 shadow-xl overflow-hidden p-4 space-y-4 text-slate-100">
       
@@ -151,7 +165,15 @@ export const GanttChartVisualizer: React.FC<GanttChartVisualizerProps> = ({
       </div>
 
       {/* Main Gantt View Table & Timeline Canvas */}
-      {safePhases.length === 0 || allItems.length === 0 ? (
+      {!hasPlannedTaskWithDateAndAssignee ? (
+        <div className="text-center py-10 bg-slate-950/50 rounded-xl border border-dashed border-slate-800 space-y-2">
+          <Clock className="w-8 h-8 text-slate-600 mx-auto mb-1" />
+          <p className="text-xs font-semibold text-slate-300">Diagramme de Gantt en attente de planification</p>
+          <p className="text-[11px] text-slate-500 max-w-md mx-auto">
+            Le chronogramme s'affichera dès que vous aurez renseigné une date (début/fin) et assigné une personne sur au moins une tâche.
+          </p>
+        </div>
+      ) : safePhases.length === 0 || allItems.length === 0 ? (
         <div className="text-center py-10 bg-slate-950/50 rounded-xl border border-dashed border-slate-800">
           <Clock className="w-8 h-8 text-slate-600 mx-auto mb-2" />
           <p className="text-xs font-semibold text-slate-400">Aucune phase ni tâche définie dans le planning.</p>

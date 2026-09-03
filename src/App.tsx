@@ -597,10 +597,15 @@ export default function App() {
       </main>
 
       {/* FOOTER BAR */}
-      <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-6 text-center text-xs text-slate-400 dark:text-slate-500 font-medium">
-        <div className="max-w-7xl mx-auto px-4">
+      <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-4 text-center text-xs text-slate-400 dark:text-slate-500 font-medium">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <p>© {new Date().getFullYear()} Plateforme de Gouvernance et Pilotage. Tous droits réservés.</p>
-          <p className="text-[10px] text-slate-300 dark:text-slate-600 mt-1">Conformité Méthodologique PMBOK & PRINCE2</p>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-slate-400 dark:text-slate-500">Conformité Méthodologique PMBOK & PRINCE2</span>
+            <span className="inline-flex items-center gap-1 font-mono text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 border border-slate-200 dark:border-slate-700 shadow-2xs">
+              v1.1
+            </span>
+          </div>
         </div>
       </footer>
 

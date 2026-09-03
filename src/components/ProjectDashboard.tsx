@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Project, 
   TeamMember, 
@@ -57,12 +57,14 @@ import {
   Paperclip,
   RotateCw,
   Download,
-  FileSpreadsheet
+  FileSpreadsheet,
+  FolderTree
 } from 'lucide-react';
 
 import {
   exportStakeholdersPDF,
   exportDecisionMatrixPDF,
+  exportWbsPDF,
   exportPlanificationPDF,
   exportRaciPDF,
   exportRisksPDF,
@@ -77,6 +79,7 @@ import { exportProjectToCsv } from '../utils/csvExport';
 
 import TeamCharterTab from './TeamCharterTab';
 import DecisionMatrixTab from './DecisionMatrixTab';
+import WbsTab from './WbsTab';
 import WorkloadTab from './WorkloadTab';
 import ClosureTab from './ClosureTab';
 import RexTab from './RexTab';
@@ -106,7 +109,7 @@ export default function ProjectDashboard({
 
   // --- CORE TABS NAVIGATION ---
   const [activeTab, setActiveTab] = useState<
-    'stakeholders' | 'decisionMatrix' | 'planification' | 'organisation' | 'risks' | 'budget' | 'communication' | 'kpis' | 'close' | 'rex' | 'docs'
+    'stakeholders' | 'decisionMatrix' | 'risks' | 'wbs' | 'organisation' | 'planification' | 'budget' | 'communication' | 'kpis' | 'close' | 'rex' | 'docs'
   >('stakeholders');
 
   // Sub-tabs for Stakeholders
@@ -138,11 +141,13 @@ export default function ProjectDashboard({
   // Permission check for active tab / module
   const getActiveModuleKey = (): ModuleKey => {
     if (activeTab === 'stakeholders') return 'charter';
+    if (activeTab === 'decisionMatrix') return 'decision';
+    if (activeTab === 'risks') return 'risks';
+    if (activeTab === 'wbs') return 'wbs';
+    if (activeTab === 'organisation') return 'charter';
     if (activeTab === 'planification') return planificationSubTab === 'workload' ? 'workload' : 'gantt';
     if (activeTab === 'budget') return 'budget';
-    if (activeTab === 'risks') return 'risks';
     if (activeTab === 'communication') return 'governance';
-    if (activeTab === 'decisionMatrix') return 'decision';
     if (activeTab === 'kpis') return 'kpis';
     if (activeTab === 'rex') return 'rex';
     if (activeTab === 'docs') return 'documents';
@@ -408,8 +413,8 @@ export default function ProjectDashboard({
   const handleAddItemToPhase = (phaseId: string) => {
     if (!itemName.trim()) return;
     const isMilestone = itemType === 'milestone';
-    const startDateVal = itemStart || project.startDate || new Date().toISOString().split('T')[0];
-    const endDateVal = isMilestone ? startDateVal : (itemEnd || startDateVal);
+    const startDateVal = itemStart || '';
+    const endDateVal = isMilestone ? (itemStart || '') : (itemEnd || itemStart || '');
 
     const newItem: GanttItem = {
       id: `item-${Date.now()}`,
@@ -421,7 +426,7 @@ export default function ProjectDashboard({
       progress: 0,
       completed: false,
       predecessorId: itemPredecessorId || undefined,
-      estimatedDays: isMilestone ? 0 : (itemEstDays || 1)
+      estimatedDays: isMilestone ? 0 : (itemEstDays || 0)
     };
 
     const updated = ganttPhases.map((p) => {
@@ -442,6 +447,20 @@ export default function ProjectDashboard({
     setItemEstDays(1);
     setActivePhaseIdForNewItem(null);
   };
+
+  // Only display the visual Gantt chart if at least one task has both a date and an assigned person
+  const hasPlannedTaskWithDateAndAssignee = useMemo(() => {
+    return ganttPhases.some((phase) =>
+      (phase.items || []).some(
+        (item) =>
+          Boolean(
+            (item.startDate?.trim() || item.endDate?.trim()) &&
+            item.assignedTo &&
+            item.assignedTo.length > 0
+          )
+      )
+    );
+  }, [ganttPhases]);
 
   const handleSaveGanttItemEdit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -527,12 +546,16 @@ export default function ProjectDashboard({
   };
 
   const getRaciRows = () => {
-    const ganttElements: string[] = [];
+    const wbsElements: string[] = [];
     ganttPhases.forEach((phase) => {
-      phase.items.forEach((item) => {
-        const prefix = item.type === 'milestone' ? 'Jalon : ' : 'Tâche : ';
-        ganttElements.push(`${prefix}${item.name}`);
-      });
+      if (!phase.items || phase.items.length === 0) {
+        wbsElements.push(`Phase : ${phase.name}`);
+      } else {
+        phase.items.forEach((item) => {
+          const prefix = item.type === 'milestone' ? '◆ Jalon : ' : '■ ';
+          wbsElements.push(`${prefix}${item.name}`);
+        });
+      }
     });
 
     const defaultActivities = [
@@ -548,12 +571,12 @@ export default function ProjectDashboard({
     const seenNorms = new Set<string>();
     const finalRows: string[] = [];
 
-    // 1. Gantt elements priority
-    ganttElements.forEach((g) => {
-      const norm = normalizeRaciKey(g);
+    // 1. WBS elements priority (phases, sub-phases, milestones)
+    wbsElements.forEach((w) => {
+      const norm = normalizeRaciKey(w);
       if (norm && !seenNorms.has(norm)) {
         seenNorms.add(norm);
-        finalRows.push(g);
+        finalRows.push(w);
       }
     });
 
@@ -1328,9 +1351,10 @@ export default function ProjectDashboard({
             {[
               { id: 'stakeholders', label: 'Parties Prenantes', icon: Users },
               { id: 'decisionMatrix', label: 'Matrice de Décision', icon: Sliders },
-              { id: 'planification', label: 'Planification', icon: Layers },
-              { id: 'organisation', label: 'Organisation (RACI)', icon: Briefcase },
               { id: 'risks', label: 'Risques', icon: ShieldAlert },
+              { id: 'wbs', label: 'WBS', icon: FolderTree },
+              { id: 'organisation', label: 'Organisation (RACI)', icon: Briefcase },
+              { id: 'planification', label: 'Planification', icon: Layers },
               { id: 'budget', label: 'Budget', icon: PiggyBank },
               { id: 'communication', label: 'Communication', icon: MessageSquare },
               { id: 'kpis', label: 'KPI', icon: Target },
@@ -1621,7 +1645,283 @@ export default function ProjectDashboard({
             <DecisionMatrixTab project={project} onUpdateProject={updateProjectData} canEdit={canEditCurrentModule} />
           )}
 
-          {/* TAB 3: PLANIFICATION */}
+          {/* TAB 3: RISQUES */}
+          {activeTab === 'risks' && (
+            <div className="space-y-6">
+              {/* 5x5 Interactive Risk Matrix Visualizer */}
+              <RiskMatrixVisualizer
+                risks={risks}
+                onEditRisk={(r) => setEditingRisk({ ...r })}
+                onRemoveRisk={(id) => handleRemoveRisk(id)}
+              />
+
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Ajouter / Modifier un Risque dans le Registre</h3>
+                  <p className="text-xs text-slate-500">Évaluez la probabilité et l'impact de chaque risque et définissez un plan de prévention.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => exportRisksPDF(project)}
+                  className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
+                  title="Télécharger le registre des risques en PDF"
+                >
+                  <Download className="w-3.5 h-3.5" /> Télécharger en PDF
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Form */}
+                {canEditCurrentModule && (
+                  <form onSubmit={handleAddRisk} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3 self-start">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
+                      <Plus className="w-3.5 h-3.5 text-indigo-600" /> Identifier un Risque
+                    </h4>
+
+                    <div className="space-y-2.5">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Description du Risque</label>
+                        <textarea
+                          rows={2}
+                          required
+                          placeholder="ex: Retard de livraison du fournisseur..."
+                          value={newRiskDesc}
+                          onChange={(e) => setNewRiskDesc(e.target.value)}
+                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Probabilité (1-5)</label>
+                          <select
+                            value={newRiskProb}
+                            onChange={(e) => setNewRiskProb(Number(e.target.value))}
+                            className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-bold"
+                          >
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Impact (1-5)</label>
+                          <select
+                            value={newRiskImpact}
+                            onChange={(e) => setNewRiskImpact(Number(e.target.value))}
+                            className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-bold"
+                          >
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Plan de Migation / Action</label>
+                        <textarea
+                          rows={2}
+                          placeholder="Mesures préventives ou correctives..."
+                          value={newRiskMitigation}
+                          onChange={(e) => setNewRiskMitigation(e.target.value)}
+                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded transition-colors shadow-2xs cursor-pointer"
+                    >
+                      Consigner le Risque
+                    </button>
+                  </form>
+                )}
+
+                {/* Risk list */}
+                <div className={`${canEditCurrentModule ? 'lg:col-span-2' : 'lg:col-span-3'} space-y-3`}>
+                  {risks.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">Aucun risque identifié dans le registre.</p>
+                  ) : (
+                    risks.map((r) => {
+                      const criticalVal = r.prob * r.impact;
+                      return (
+                        <div key={r.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                          <div className="flex justify-between items-start gap-2">
+                            <h5 className="text-xs font-bold text-slate-900">{r.desc}</h5>
+                            <div className="flex items-center gap-1">
+                              <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full font-mono ${
+                                criticalVal >= 15 ? 'bg-rose-100 text-rose-800' : criticalVal >= 8 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                              }`}>
+                                Score: {criticalVal} (P:{r.prob} × I:{r.impact})
+                              </span>
+                              {canEditCurrentModule && (
+                                <>
+                                  <button
+                                    onClick={() => setEditingRisk({ ...r })}
+                                    className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"
+                                    title="Modifier"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleRemoveRisk(r.id)}
+                                    className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                                    title="Supprimer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          {r.mitigation && (
+                            <p className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded border border-slate-100">
+                              <span className="font-bold text-slate-700">Mitigation:</span> {r.mitigation}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: WBS (WORK BREAKDOWN STRUCTURE) */}
+          {activeTab === 'wbs' && (
+            <WbsTab
+              project={project}
+              onUpdateProject={updateProjectData}
+              canEdit={canEditCurrentModule}
+              onNavigateToGantt={() => setActiveTab('planification')}
+              globalTeam={globalTeam}
+            />
+          )}
+
+          {/* TAB 5: ORGANISATION (RACI) */}
+          {activeTab === 'organisation' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Matrice de Responsabilités (RACI)</h3>
+                  <p className="text-xs text-slate-500">
+                    Définissez la matrice R (Réalise), A (Approuve), C (Consulté), I (Informé) par lot et tâche du WBS pour chaque groupe de parties prenantes.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentRaciArray = Object.entries(raciAssignments).map(([rowName, assignments]) => ({
+                      rowName,
+                      assignments: assignments as Record<string, string>
+                    }));
+                    exportRaciPDF(
+                      {
+                        ...project,
+                        raciAssignments: currentRaciArray,
+                        customRaciRows,
+                        stakeholderGroups,
+                        ganttPhases
+                      },
+                      globalTeam
+                    );
+                  }}
+                  className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
+                  title="Télécharger la matrice RACI en PDF"
+                >
+                  <Download className="w-3.5 h-3.5" /> Télécharger en PDF
+                </button>
+              </div>
+
+              {/* Add Custom Row */}
+              {canEditCurrentModule && (
+                <form onSubmit={handleAddCustomRaciRow} className="flex gap-2 max-w-md">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ajouter un livrable/activité spécifique..."
+                    value={newRaciRow}
+                    onChange={(e) => setNewRaciRow(e.target.value)}
+                    className="text-xs px-3 py-1.5 border border-slate-300 rounded-lg bg-white flex-1"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs cursor-pointer"
+                  >
+                    Ajouter Ligne
+                  </button>
+                </form>
+              )}
+
+              {/* RACI Table */}
+              <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-700 uppercase font-bold text-[10px]">
+                      <th className="p-3 border-b border-slate-200">Élément WBS / Livrable</th>
+                      {getRaciParticipants().map((part) => (
+                        <th key={part.id} className="p-3 border-b border-slate-200 text-center">
+                          <div>{part.name}</div>
+                          {part.role && <div className="text-[9px] font-normal text-slate-400 capitalize">{part.role}</div>}
+                        </th>
+                      ))}
+                      {canEditCurrentModule && <th className="p-3 border-b border-slate-200 text-center w-12">Action</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {getRaciRows().map((rowName) => (
+                      <tr key={rowName} className="hover:bg-slate-50/60 border-b border-slate-100">
+                        <td className="p-3 font-semibold text-slate-800">{rowName}</td>
+                        {getRaciParticipants().map((part) => {
+                          const currentVal = getRaciCellValue(rowName, part.id, part.name);
+                          return (
+                            <td key={part.id} className="p-2 text-center">
+                              <select
+                                value={currentVal}
+                                disabled={!canEditCurrentModule}
+                                onChange={(e) => handleUpdateRaciCell(rowName, part.id, e.target.value)}
+                                className={`text-xs font-bold px-2 py-1 border rounded bg-white ${
+                                  currentVal === 'R' ? 'text-indigo-600 border-indigo-300 bg-indigo-50/40' :
+                                  currentVal === 'A' ? 'text-emerald-600 border-emerald-300 bg-emerald-50/40' :
+                                  currentVal === 'C' ? 'text-amber-600 border-amber-300 bg-amber-50/40' :
+                                  currentVal === 'I' ? 'text-slate-600 border-slate-300 bg-slate-50/40' : ''
+                                } ${!canEditCurrentModule ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}`}
+                              >
+                                <option value="">-</option>
+                                <option value="R">R (Réalise)</option>
+                                <option value="A">A (Approuve)</option>
+                                <option value="C">C (Consulté)</option>
+                                <option value="I">I (Informé)</option>
+                              </select>
+                            </td>
+                          );
+                        })}
+                        {canEditCurrentModule && (
+                          <td className="p-2 text-center">
+                            <button
+                              onClick={() => handleDeleteCustomRaciRow(rowName)}
+                              className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
+                              title="Supprimer la ligne"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 6: PLANIFICATION */}
           {activeTab === 'planification' && (
             <div className="space-y-6">
               {/* Planification Sub-tabs */}
@@ -1685,15 +1985,33 @@ export default function ProjectDashboard({
                 />
               ) : (
                 <div className="space-y-6">
-                  {/* Interactive Gantt Visualizer */}
-                  <GanttChartVisualizer
-                    phases={ganttPhases}
-                    teamMembers={globalTeam}
-                    projectStartDate={project.startDate}
-                    projectEndDate={project.endDate}
-                    onUpdateProgress={(phaseId, itemId, progress) => handleUpdateTaskProgress(phaseId, itemId, progress)}
-                    onToggleMilestone={(phaseId, itemId, completed) => handleToggleMilestone(phaseId, itemId, completed)}
-                  />
+                  {/* Interactive Gantt Visualizer - only displayed once a task has date and assignee */}
+                  {hasPlannedTaskWithDateAndAssignee ? (
+                    <GanttChartVisualizer
+                      phases={ganttPhases}
+                      teamMembers={globalTeam}
+                      projectStartDate={project.startDate}
+                      projectEndDate={project.endDate}
+                      onUpdateProgress={(phaseId, itemId, progress) => handleUpdateTaskProgress(phaseId, itemId, progress)}
+                      onToggleMilestone={(phaseId, itemId, completed) => handleToggleMilestone(phaseId, itemId, completed)}
+                    />
+                  ) : (
+                    <div className="bg-slate-900 rounded-xl border border-slate-800 p-8 text-center space-y-3 shadow-xl text-slate-100">
+                      <div className="w-12 h-12 bg-indigo-950/80 text-indigo-400 border border-indigo-800/60 rounded-xl flex items-center justify-center mx-auto">
+                        <Clock className="w-6 h-6" />
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-200">
+                        Diagramme de Gantt en attente de planification
+                      </h4>
+                      <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                        Le diagramme de Gantt ne s'affiche pas tant qu'une <strong>date</strong> et une <strong>personne</strong> n'ont pas été renseignées sur au moins une tâche.
+                      </p>
+                      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-950/40 text-amber-300 border border-amber-800/80 text-[11px] font-medium">
+                        <span>💡</span>
+                        <span>Renseignez les dates (début/fin) et un responsable sur une tâche ci-dessous pour activer le diagramme de Gantt.</span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Create Phase form */}
                   {canEditCurrentModule && (
@@ -1973,271 +2291,7 @@ export default function ProjectDashboard({
             </div>
           )}
 
-          {/* TAB 4: RACI */}
-          {activeTab === 'organisation' && (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 pb-3">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800">Matrice de Responsabilités (RACI)</h3>
-                  <p className="text-xs text-slate-500">
-                    Définissez la matrice R (Réalise), A (Approuve), C (Consulté), I (Informé) par ligne de tâche/jalon.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const currentRaciArray = Object.entries(raciAssignments).map(([rowName, assignments]) => ({
-                      rowName,
-                      assignments: assignments as Record<string, string>
-                    }));
-                    exportRaciPDF(
-                      {
-                        ...project,
-                        raciAssignments: currentRaciArray,
-                        customRaciRows,
-                        stakeholderGroups,
-                        ganttPhases
-                      },
-                      globalTeam
-                    );
-                  }}
-                  className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
-                  title="Télécharger la matrice RACI en PDF"
-                >
-                  <Download className="w-3.5 h-3.5" /> Télécharger en PDF
-                </button>
-              </div>
-
-              {/* Add Custom Row */}
-              {canEditCurrentModule && (
-                <form onSubmit={handleAddCustomRaciRow} className="flex gap-2 max-w-md">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ajouter un livrable/activité spécifique..."
-                    value={newRaciRow}
-                    onChange={(e) => setNewRaciRow(e.target.value)}
-                    className="text-xs px-3 py-1.5 border border-slate-300 rounded-lg bg-white flex-1"
-                  />
-                  <button
-                    type="submit"
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs cursor-pointer"
-                  >
-                    Ajouter Ligne
-                  </button>
-                </form>
-              )}
-
-              {/* RACI Table */}
-              <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-100 text-slate-700 uppercase font-bold text-[10px]">
-                      <th className="p-3 border-b border-slate-200">Activité / Livrable</th>
-                      {getRaciParticipants().map((part) => (
-                        <th key={part.id} className="p-3 border-b border-slate-200 text-center">
-                          <div>{part.name}</div>
-                          {part.role && <div className="text-[9px] font-normal text-slate-400 capitalize">{part.role}</div>}
-                        </th>
-                      ))}
-                      {canEditCurrentModule && <th className="p-3 border-b border-slate-200 text-center w-12">Action</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {getRaciRows().map((rowName) => (
-                      <tr key={rowName} className="hover:bg-slate-50/60 border-b border-slate-100">
-                        <td className="p-3 font-semibold text-slate-800">{rowName}</td>
-                        {getRaciParticipants().map((part) => {
-                          const currentVal = getRaciCellValue(rowName, part.id, part.name);
-                          return (
-                            <td key={part.id} className="p-2 text-center">
-                              <select
-                                value={currentVal}
-                                disabled={!canEditCurrentModule}
-                                onChange={(e) => handleUpdateRaciCell(rowName, part.id, e.target.value)}
-                                className={`text-xs font-bold px-2 py-1 border rounded bg-white ${
-                                  currentVal === 'R' ? 'text-indigo-600 border-indigo-300 bg-indigo-50/40' :
-                                  currentVal === 'A' ? 'text-emerald-600 border-emerald-300 bg-emerald-50/40' :
-                                  currentVal === 'C' ? 'text-amber-600 border-amber-300 bg-amber-50/40' :
-                                  currentVal === 'I' ? 'text-slate-600 border-slate-300 bg-slate-50/40' : ''
-                                } ${!canEditCurrentModule ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}`}
-                              >
-                                <option value="">-</option>
-                                <option value="R">R (Réalise)</option>
-                                <option value="A">A (Approuve)</option>
-                                <option value="C">C (Consulté)</option>
-                                <option value="I">I (Informé)</option>
-                              </select>
-                            </td>
-                          );
-                        })}
-                        {canEditCurrentModule && (
-                          <td className="p-2 text-center">
-                            <button
-                              onClick={() => handleDeleteCustomRaciRow(rowName)}
-                              className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
-                              title="Supprimer la ligne"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 5: RISQUES */}
-          {activeTab === 'risks' && (
-            <div className="space-y-6">
-              {/* 5x5 Interactive Risk Matrix Visualizer */}
-              <RiskMatrixVisualizer
-                risks={risks}
-                onEditRisk={(r) => setEditingRisk({ ...r })}
-                onRemoveRisk={(id) => handleRemoveRisk(id)}
-              />
-
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 pb-3">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800">Ajouter / Modifier un Risque dans le Registre</h3>
-                  <p className="text-xs text-slate-500">Évaluez la probabilité et l'impact de chaque risque et définissez un plan de prévention.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => exportRisksPDF(project)}
-                  className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
-                  title="Télécharger le registre des risques en PDF"
-                >
-                  <Download className="w-3.5 h-3.5" /> Télécharger en PDF
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* Form */}
-                {canEditCurrentModule && (
-                  <form onSubmit={handleAddRisk} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3 self-start">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-1">
-                      <Plus className="w-3.5 h-3.5 text-indigo-600" /> Identifier un Risque
-                    </h4>
-
-                    <div className="space-y-2.5">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Description du Risque</label>
-                        <textarea
-                          rows={2}
-                          required
-                          placeholder="ex: Retard de livraison du fournisseur..."
-                          value={newRiskDesc}
-                          onChange={(e) => setNewRiskDesc(e.target.value)}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Probabilité (1-5)</label>
-                          <select
-                            value={newRiskProb}
-                            onChange={(e) => setNewRiskProb(Number(e.target.value))}
-                            className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-bold"
-                          >
-                            {[1, 2, 3, 4, 5].map((n) => (
-                              <option key={n} value={n}>{n}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Impact (1-5)</label>
-                          <select
-                            value={newRiskImpact}
-                            onChange={(e) => setNewRiskImpact(Number(e.target.value))}
-                            className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-bold"
-                          >
-                            {[1, 2, 3, 4, 5].map((n) => (
-                              <option key={n} value={n}>{n}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Plan de Migation / Action</label>
-                        <textarea
-                          rows={2}
-                          placeholder="Mesures préventives ou correctives..."
-                          value={newRiskMitigation}
-                          onChange={(e) => setNewRiskMitigation(e.target.value)}
-                          className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded transition-colors shadow-2xs cursor-pointer"
-                    >
-                      Consigner le Risque
-                    </button>
-                  </form>
-                )}
-
-                {/* Risk list */}
-                <div className={`${canEditCurrentModule ? 'lg:col-span-2' : 'lg:col-span-3'} space-y-3`}>
-                  {risks.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic">Aucun risque identifié dans le registre.</p>
-                  ) : (
-                    risks.map((r) => {
-                      const criticalVal = r.prob * r.impact;
-                      return (
-                        <div key={r.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
-                          <div className="flex justify-between items-start gap-2">
-                            <h5 className="text-xs font-bold text-slate-900">{r.desc}</h5>
-                            <div className="flex items-center gap-1">
-                              <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full font-mono ${
-                                criticalVal >= 15 ? 'bg-rose-100 text-rose-800' : criticalVal >= 8 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                              }`}>
-                                Score: {criticalVal} (P:{r.prob} × I:{r.impact})
-                              </span>
-                              {canEditCurrentModule && (
-                                <>
-                                  <button
-                                    onClick={() => setEditingRisk({ ...r })}
-                                    className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"
-                                    title="Modifier"
-                                  >
-                                    <Edit3 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleRemoveRisk(r.id)}
-                                    className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          {r.mitigation && (
-                            <p className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded border border-slate-100">
-                              <span className="font-bold text-slate-700">Mitigation:</span> {r.mitigation}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-              </div>
-            </div>
-          )}
-
-          {/* TAB 6: BUDGET */}
+          {/* TAB 7: BUDGET */}
           {activeTab === 'budget' && (
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 pb-3">
