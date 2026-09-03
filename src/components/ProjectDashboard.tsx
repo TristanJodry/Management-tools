@@ -87,6 +87,7 @@ import DocumentsTab from './DocumentsTab';
 import KpisTab from './KpisTab';
 import { GanttChartVisualizer } from './GanttChartVisualizer';
 import { RiskMatrixVisualizer } from './RiskMatrixVisualizer';
+import { BudgetPieChartVisualizer } from './BudgetPieChartVisualizer';
 import KanbanBoard from './KanbanBoard';
 import ProjectAlertsBanner from './ProjectAlertsBanner';
 
@@ -2523,6 +2524,12 @@ export default function ProjectDashboard({
                 </div>
 
               </div>
+
+              {/* Dynamic Live Budget Pie Charts (Groups & Expenses) */}
+              <BudgetPieChartVisualizer
+                budgetGroups={budgetGroups}
+                initialBudget={initialBudget}
+              />
             </div>
           )}
 

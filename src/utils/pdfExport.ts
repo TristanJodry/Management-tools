@@ -46,6 +46,154 @@ const getStatusLabel = (status: string) => {
   }
 };
 
+const PIE_PALETTE = [
+  '#6366f1', '#10b981', '#f59e0b', '#ec4899',
+  '#06b6d4', '#8b5cf6', '#f97316', '#14b8a6',
+  '#3b82f6', '#84cc16', '#a855f7', '#ef4444'
+];
+
+function generatePieChartDataUrl(
+  title: string,
+  slices: { label: string; value: number; color: string }[],
+  width = 540,
+  height = 300
+): string | null {
+  if (typeof document === 'undefined') return null;
+  const total = slices.reduce((sum, s) => sum + s.value, 0);
+  if (total <= 0 || slices.length === 0) return null;
+
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    // Background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(1, 1, width - 2, height - 2);
+
+    // Header bar
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(1, 1, width - 2, 32);
+    ctx.fillStyle = '#1e293b';
+    ctx.font = 'bold 12.5px Helvetica, Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(title.toUpperCase(), 14, 21);
+
+    // Pie Center & Dimensions
+    const centerX = width * 0.28;
+    const centerY = height * 0.58;
+    const radius = Math.min(centerX, centerY) - 22;
+
+    let currentAngle = -Math.PI / 2;
+    slices.forEach((slice) => {
+      const sliceAngle = (slice.value / total) * 2 * Math.PI;
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + sliceAngle);
+      ctx.closePath();
+      ctx.fillStyle = slice.color;
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      currentAngle += sliceAngle;
+    });
+
+    // Donut inner circle
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius * 0.46, 0, 2 * Math.PI);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+
+    // Center total text
+    ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
+    ctx.fillStyle = '#0f172a';
+    ctx.textAlign = 'center';
+    ctx.fillText(formatEuro(total), centerX, centerY + 4);
+
+    // Legends on the right
+    const legendX = width * 0.53;
+    let legendY = 56;
+    const maxLegends = Math.min(slices.length, 6);
+
+    for (let i = 0; i < maxLegends; i++) {
+      const s = slices[i];
+      const pct = Math.round((s.value / total) * 100);
+
+      // Color pill
+      ctx.fillStyle = s.color;
+      ctx.fillRect(legendX, legendY - 9, 11, 11);
+
+      // Legend label and percentage
+      ctx.font = 'bold 10.5px Helvetica, Arial, sans-serif';
+      ctx.fillStyle = '#1e293b';
+      ctx.textAlign = 'left';
+      const truncLabel = s.label.length > 22 ? s.label.slice(0, 20) + '..' : s.label;
+      ctx.fillText(`${truncLabel} (${pct}%)`, legendX + 16, legendY);
+
+      // Euro amount
+      ctx.font = 'normal 9.5px Helvetica, Arial, sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText(formatEuro(s.value), legendX + 16, legendY + 12);
+
+      legendY += 28;
+    }
+
+    if (slices.length > maxLegends) {
+      ctx.font = 'italic 9px Helvetica, Arial, sans-serif';
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText(`+ ${slices.length - maxLegends} autre(s)...`, legendX + 16, legendY);
+    }
+
+    return canvas.toDataURL('image/png');
+  } catch (err) {
+    console.error('Erreur generation camembert canvas:', err);
+    return null;
+  }
+}
+
+function generateBudgetPieCharts(budgetGroups: BudgetGroup[]): { groupsImg: string | null; expensesImg: string | null } {
+  const groupSlices = budgetGroups.map((g, idx) => {
+    const expenses = g.expenses || [];
+    const spent = expenses.reduce((acc, e) => acc + (e.spent || 0), 0);
+    const planned = expenses.reduce((acc, e) => acc + (e.planned || 0), 0);
+    const value = spent > 0 ? spent : planned;
+    return {
+      label: sanitizePdfText(g.title || g.name || `Poste ${idx + 1}`),
+      value,
+      color: PIE_PALETTE[idx % PIE_PALETTE.length]
+    };
+  }).filter(s => s.value > 0);
+
+  const expenseSlices: { label: string; value: number; color: string }[] = [];
+  let expIdx = 0;
+  budgetGroups.forEach(g => {
+    (g.expenses || []).forEach(e => {
+      const val = (e.spent || 0) > 0 ? (e.spent || 0) : (e.planned || 0);
+      if (val > 0) {
+        expenseSlices.push({
+          label: sanitizePdfText(e.name || e.title || 'Depense'),
+          value: val,
+          color: PIE_PALETTE[expIdx % PIE_PALETTE.length]
+        });
+        expIdx++;
+      }
+    });
+  });
+  expenseSlices.sort((a, b) => b.value - a.value);
+
+  return {
+    groupsImg: groupSlices.length > 0 ? generatePieChartDataUrl('Repartition par Postes Budgétaires', groupSlices) : null,
+    expensesImg: expenseSlices.length > 0 ? generatePieChartDataUrl('Repartition par Depenses Individuelles', expenseSlices) : null
+  };
+}
+
 // Common header generator
 function addPdfHeader(
   doc: jsPDF,
@@ -345,7 +493,7 @@ export function exportWbsPDF(project: Project) {
     tableData.push([
       {
         content: `WBS ${phaseCode} : ${sanitizePdfText(phase.name.toUpperCase())}`,
-        colSpan: 3,
+        colSpan: 5,
         styles: {
           fillColor: [30, 41, 59],
           textColor: [251, 191, 36],
@@ -360,6 +508,8 @@ export function exportWbsPDF(project: Project) {
       tableData.push([
         `${phaseCode}.1`,
         'Aucune tache ou jalon defini dans cette phase',
+        '-',
+        '-',
         '-'
       ]);
     } else {
@@ -367,23 +517,28 @@ export function exportWbsPDF(project: Project) {
         const itemCode = `${pIdx + 1}.${iIdx + 1}`;
         const isMilestone = item.type === 'milestone';
         const typeLabel = isMilestone ? 'Jalon cle (Milestone)' : 'Tache';
+        const statusLabel = item.completed ? 'Acheve' : (item.progress ? `${item.progress}%` : 'A faire');
+        const dateLabel = item.endDate || item.startDate || (item.estimatedDays ? `${item.estimatedDays} j` : '-');
 
         tableData.push([
           itemCode,
           isMilestone ? `[JALON] ${sanitizePdfText(item.name)}` : sanitizePdfText(item.name),
-          typeLabel
+          typeLabel,
+          statusLabel,
+          dateLabel
         ]);
       });
     }
   });
 
   if (tableData.length === 0) {
-    tableData.push(['-', 'Aucune phase WBS enregistree', '-']);
+    tableData.push(['-', 'Aucune phase WBS enregistree', '-', '-', '-']);
   }
 
   autoTable(doc, {
     startY: currentY,
-    head: [['Code WBS', 'Element / Intitule', 'Type']],
+    head: [['Code WBS', 'Element / Intitule', 'Type', 'Statut / Avancement', 'Echeance']],
+    body: tableData,
     headStyles: {
       fillColor: [67, 56, 202],
       textColor: 255,
@@ -393,9 +548,11 @@ export function exportWbsPDF(project: Project) {
     alternateRowStyles: { fillColor: [248, 250, 252] },
     styles: { fontSize: 7.5, cellPadding: 2.5 },
     columnStyles: {
-      0: { cellWidth: 30, fontStyle: 'bold', halign: 'center' },
-      1: { cellWidth: 105 },
-      2: { cellWidth: 47 }
+      0: { cellWidth: 24, fontStyle: 'bold', halign: 'center' },
+      1: { cellWidth: 80 },
+      2: { cellWidth: 32 },
+      3: { cellWidth: 26, halign: 'center' },
+      4: { cellWidth: 20, halign: 'center' }
     },
     margin: { left: 14, right: 14 }
   });
@@ -1488,24 +1645,26 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
     currentY += Math.max(10, splitDesc.length * 4.2 + 4);
   }
 
-  // MODULE 2: Parties Prenantes & Charte d'Équipe
+  // ==========================================
+  // 1. PARTIES PRENANTES (& Charte d'équipe si renseignée)
+  // ==========================================
   const hasStakeholders = (project.stakeholders && project.stakeholders.length > 0) || (project.stakeholderGroups && project.stakeholderGroups.some(g => (g.stakeholders || []).length > 0));
   const hasCharter = Boolean(project.teamCharter?.values || project.teamCharter?.rules || project.teamCharter?.commitments || project.teamCharter?.decisionRules);
 
   if (hasStakeholders || hasCharter) {
-    drawSectionHeader(`${sectionCounter++}. Organisation, Parties Prenantes & Charte d'Équipe`);
+    drawSectionHeader(`${sectionCounter++}. Parties Prenantes & Organisation`);
 
     if (hasCharter && project.teamCharter) {
       const charterRows = [
-        ['Valeurs Communes', project.teamCharter.values || 'Non renseigné'],
-        ['Règles de Fonctionnement', project.teamCharter.rules || 'Non renseigné'],
-        ['Engagements & Modalités', project.teamCharter.commitments || 'Non renseigné']
-      ].filter(r => r[1] !== 'Non renseigné');
+        ['Valeurs Communes', sanitizePdfText(project.teamCharter.values) || 'Non renseigne'],
+        ['Regles de Fonctionnement', sanitizePdfText(project.teamCharter.rules) || 'Non renseigne'],
+        ['Engagements & Modalites', sanitizePdfText(project.teamCharter.commitments) || 'Non renseigne']
+      ].filter(r => r[1] !== 'Non renseigne');
 
       if (charterRows.length > 0) {
         autoTable(doc, {
           startY: currentY,
-          head: [['Axe de la Charte', 'Engagements définis']],
+          head: [['Axe de la Charte', 'Engagements definis']],
           body: charterRows,
           headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
           styles: { fontSize: 7.5, cellPadding: 2.5 },
@@ -1520,12 +1679,12 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
       const allSh: string[][] = [];
       (project.stakeholderGroups || []).forEach(g => {
         (g.stakeholders || []).forEach(s => {
-          allSh.push([s.name || '-', s.role || '-', g.name || 'Général', s.influence === 'high' ? 'Élevée' : s.influence === 'medium' ? 'Moyenne' : 'Faible']);
+          allSh.push([sanitizePdfText(s.name) || '-', sanitizePdfText(s.role) || '-', sanitizePdfText(g.name) || 'General', s.influence === 'high' ? 'Elevee' : s.influence === 'medium' ? 'Moyenne' : 'Faible']);
         });
       });
       (project.stakeholders || []).forEach(s => {
-        if (!allSh.some(row => row[0] === s.name)) {
-          allSh.push([s.name || '-', s.role || '-', 'Direct', s.influence === 'high' ? 'Élevée' : s.influence === 'medium' ? 'Moyenne' : 'Faible']);
+        if (!allSh.some(row => row[0] === sanitizePdfText(s.name))) {
+          allSh.push([sanitizePdfText(s.name) || '-', sanitizePdfText(s.role) || '-', 'Direct', s.influence === 'high' ? 'Elevee' : s.influence === 'medium' ? 'Moyenne' : 'Faible']);
         }
       });
 
@@ -1533,8 +1692,8 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
         checkPageBreak(25);
         autoTable(doc, {
           startY: currentY,
-          head: [['Partie Prenante', 'Rôle / Organisation', 'Groupe', 'Influence']],
-          body: allSh.slice(0, 6),
+          head: [['Partie Prenante', 'Role / Organisation', 'Groupe', 'Influence']],
+          body: allSh,
           headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
           styles: { fontSize: 7.5, cellPadding: 2.5 },
           margin: { left: 14, right: 14 }
@@ -1544,57 +1703,136 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
     }
   }
 
-  // MODULE 3: Planning, Phases & Jalons Clés (Gantt)
-  const ganttPhases = project.ganttPhases || [];
-  const allGanttItems: any[] = [];
-  ganttPhases.forEach(phase => {
-    (phase.items || []).forEach(item => {
-      allGanttItems.push({
-        name: item.name,
-        phase: phase.name,
-        type: item.type === 'milestone' ? 'Jalon' : 'Livrable',
-        date: item.endDate || item.startDate || 'N/A',
-        progress: `${item.progress || 0}%`,
-        status: item.completed ? 'Achevé' : (item.progress && item.progress > 0 ? 'En cours' : 'À faire')
-      });
+  // ==========================================
+  // 2. MATRICES DE DECISION
+  // ==========================================
+  const decisions = (project.decisionMatrix || []).filter(d => (d.title && d.title.trim().length > 0) || (d.options && d.options.length > 0));
+  if (decisions.length > 0) {
+    drawSectionHeader(`${sectionCounter++}. Matrices de Decision & Arbitrages`);
+    const decisionRows = decisions.map((d, idx) => {
+      const chosenOpt = (d.options || []).find(o => o.id === d.selectedOptionId);
+      return [
+        `D-${idx + 1} : ${sanitizePdfText(d.title)}`,
+        d.date || '-',
+        d.status ? d.status.toUpperCase() : 'EN COURS',
+        chosenOpt ? `Option retenue : ${sanitizePdfText(chosenOpt.name)}` : (sanitizePdfText(d.description) || '-'),
+        d.selectedOptionId ? 'Valide' : 'A trancher'
+      ];
     });
-  });
-
-  if (allGanttItems.length > 0) {
-    drawSectionHeader(`${sectionCounter++}. Planning, Jalons & Livrables Clés`);
-    const milestoneTableData = allGanttItems.map(m => [
-      m.name,
-      m.phase,
-      m.type,
-      m.date,
-      m.progress,
-      m.status
-    ]);
 
     autoTable(doc, {
       startY: currentY,
-      head: [['Jalon / Livrable', 'Phase', 'Type', 'Échéance', 'Progression', 'Statut']],
-      body: milestoneTableData,
+      head: [['Decision / Objet', 'Date', 'Statut', 'Option Retenue / Detail', 'Validation']],
+      body: decisionRows,
       headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
+      styles: { fontSize: 7.5, cellPadding: 2.5 },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 }, 1: { cellWidth: 22 }, 2: { cellWidth: 24, halign: 'center' }, 3: { cellWidth: 62 }, 4: { cellWidth: 24, halign: 'center' } },
+      margin: { left: 14, right: 14 }
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 6;
+  }
+
+  // ==========================================
+  // 3. LES RISQUES
+  // ==========================================
+  const rawRisks = (project.risksRegister || project.risks || []).filter(r => (r.desc && r.desc.trim().length > 0) || r.prob || r.impact);
+  if (rawRisks.length > 0) {
+    drawSectionHeader(`${sectionCounter++}. Registre des Risques & Actions de Mitigation`, [185, 28, 28]);
+    const risksData = rawRisks.map(r => {
+      const prob = r.prob || 1;
+      const impact = r.impact || 1;
+      const gravScore = prob * impact;
+      const gravLabel = gravScore >= 12 ? 'Critique' : gravScore >= 6 ? 'Modere' : 'Faible';
+      return [
+        sanitizePdfText(r.desc) || 'Risque non specifie',
+        `P:${prob} / I:${impact}`,
+        gravLabel,
+        sanitizePdfText(r.mitigation) || 'Surveillance continue',
+        r.owner ? sanitizePdfText(getMemberName(r.owner)) : 'Equipe'
+      ];
+    });
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Risque identifie', 'Prob. / Impact', 'Gravite', 'Plan de mitigation / Action', 'Pilote']],
+      body: risksData,
+      headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+      alternateRowStyles: { fillColor: [254, 242, 242] },
       styles: { fontSize: 7.5, cellPadding: 2.5 },
       columnStyles: {
-        0: { cellWidth: 55, fontStyle: 'bold' },
-        1: { cellWidth: 40 },
-        2: { cellWidth: 20 },
-        3: { cellWidth: 25 },
-        4: { cellWidth: 20, halign: 'center' },
-        5: { cellWidth: 22, halign: 'center' }
+        0: { cellWidth: 50, fontStyle: 'bold' },
+        1: { cellWidth: 25, halign: 'center' },
+        2: { cellWidth: 20, halign: 'center' },
+        3: { cellWidth: 60 },
+        4: { cellWidth: 27 }
       },
       margin: { left: 14, right: 14 }
     });
     currentY = (doc as any).lastAutoTable.finalY + 6;
   }
 
-  // MODULE 4: Matrice des Responsabilités (RACI)
-  const raciAssignments = project.raciAssignments || [];
-  if (raciAssignments.length > 0) {
-    drawSectionHeader(`${sectionCounter++}. Matrice des Responsabilités (RACI)`);
+  // ==========================================
+  // 4. LE WBS (Organigramme des Tâches)
+  // ==========================================
+  const wbsPhases = (project.ganttPhases || []).filter(p => (p.items && p.items.length > 0) || (p.name && p.name.trim().length > 0));
+  if (wbsPhases.length > 0) {
+    drawSectionHeader(`${sectionCounter++}. Organigramme des Taches (WBS)`);
+    const wbsRows: any[] = [];
+    wbsPhases.forEach((phase, pIdx) => {
+      const phaseCode = `${pIdx + 1}.0`;
+      wbsRows.push([
+        {
+          content: `WBS ${phaseCode} : ${sanitizePdfText(phase.name.toUpperCase())}`,
+          colSpan: 5,
+          styles: { fillColor: [30, 41, 59], textColor: [251, 191, 36], fontStyle: 'bold', fontSize: 7.5 }
+        }
+      ]);
+      const items = phase.items || [];
+      if (items.length === 0) {
+        wbsRows.push([`${phaseCode}.1`, 'Aucune tache ou jalon defini dans cette phase', '-', '-', '-']);
+      } else {
+        items.forEach((item, iIdx) => {
+          const itemCode = `${pIdx + 1}.${iIdx + 1}`;
+          const isMilestone = item.type === 'milestone';
+          const typeLabel = isMilestone ? 'Jalon cle' : 'Tache';
+          const statusLabel = item.completed ? 'Acheve' : (item.progress ? `${item.progress}%` : 'A faire');
+          const dateLabel = item.endDate || item.startDate || (item.estimatedDays ? `${item.estimatedDays} j` : '-');
+          wbsRows.push([
+            itemCode,
+            isMilestone ? `[JALON] ${sanitizePdfText(item.name)}` : sanitizePdfText(item.name),
+            typeLabel,
+            statusLabel,
+            dateLabel
+          ]);
+        });
+      }
+    });
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Code WBS', 'Element / Intitule', 'Type', 'Statut / Avancement', 'Echeance']],
+      body: wbsRows,
+      headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      styles: { fontSize: 7.5, cellPadding: 2.5 },
+      columnStyles: {
+        0: { cellWidth: 24, fontStyle: 'bold', halign: 'center' },
+        1: { cellWidth: 80 },
+        2: { cellWidth: 28 },
+        3: { cellWidth: 26, halign: 'center' },
+        4: { cellWidth: 24, halign: 'center' }
+      },
+      margin: { left: 14, right: 14 }
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 6;
+  }
+
+  // ==========================================
+  // 5. LA MATRICE RACI
+  // ==========================================
+  const rawRaci = (project.raciAssignments || []).filter(r => (r.rowName && r.rowName.trim().length > 0) && Object.keys(r.assignments || {}).length > 0);
+  if (rawRaci.length > 0) {
+    drawSectionHeader(`${sectionCounter++}. Matrice des Responsabilites (RACI)`);
     const stakeholderGroups = project.stakeholderGroups || [];
     const groupCols = stakeholderGroups.length > 0
       ? stakeholderGroups.slice(0, 5).map((g) => ({
@@ -1604,12 +1842,12 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
         }))
       : [
           { id: 'group-copil', name: 'COPIL', stakeholders: [] },
-          { id: 'group-equipe', name: 'Équipe Projet', stakeholders: [] },
-          { id: 'group-metier', name: 'Métier', stakeholders: [] }
+          { id: 'group-equipe', name: 'Equipe Projet', stakeholders: [] },
+          { id: 'group-metier', name: 'Metier', stakeholders: [] }
         ];
 
-    const headCols = ['Activité / Tâche', ...groupCols.map((g) => sanitizePdfText(g.name))];
-    const bodyCols = raciAssignments.map((r) => {
+    const headCols = ['Activite / Tache', ...groupCols.map((g) => sanitizePdfText(g.name))];
+    const bodyCols = rawRaci.map((r) => {
       const assignments = groupCols.map((g) => {
         if (!r.assignments) return '-';
         const cleanId = g.id.replace(/^group-/, '');
@@ -1652,58 +1890,172 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
       body: bodyCols,
       headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 7.5, halign: 'center' },
       styles: { fontSize: 7.5, cellPadding: 2.5, halign: 'center' },
-      columnStyles: { 0: { halign: 'left', fontStyle: 'bold', cellWidth: 60 } },
+      columnStyles: { 0: { halign: 'left', fontStyle: 'bold', cellWidth: 55 } },
       margin: { left: 14, right: 14 }
     });
     currentY = (doc as any).lastAutoTable.finalY + 6;
   }
 
-  // MODULE 5: Matrice des Risques & Actions de Mitigation
-  const rawRisks = project.risksRegister || project.risks || [];
-  if (rawRisks.length > 0) {
-    drawSectionHeader(`${sectionCounter++}. Registre des Risques & Actions de Mitigation`, [185, 28, 28]);
-    const risksData = rawRisks.map(r => {
-      const prob = r.prob || 1;
-      const impact = r.impact || 1;
-      const gravScore = prob * impact;
-      const gravLabel = gravScore >= 12 ? 'Critique' : gravScore >= 6 ? 'Modéré' : 'Faible';
-      return [
-        sanitizePdfText(r.desc) || 'Risque non spécifié',
-        `P:${prob} / I:${impact}`,
-        gravLabel,
-        sanitizePdfText(r.mitigation) || 'Surveillance continue',
-        r.owner ? sanitizePdfText(getMemberName(r.owner)) : 'Équipe'
-      ];
+  // ==========================================
+  // 6. LA PLANIFICATION (AVEC LE GRAPHIQUE DE GANTT)
+  // ==========================================
+  const ganttPhases = project.ganttPhases || [];
+  const allGanttItems: any[] = [];
+  const ganttTimestamps: number[] = [];
+
+  ganttPhases.forEach(phase => {
+    (phase.items || []).forEach(item => {
+      const s = parseProjectDate(item.startDate);
+      const e = parseProjectDate(item.endDate);
+      if (s) ganttTimestamps.push(s);
+      if (e) ganttTimestamps.push(e);
+
+      allGanttItems.push({
+        name: item.name,
+        phase: phase.name,
+        type: item.type === 'milestone' ? 'Jalon' : 'Tache',
+        startDate: item.startDate,
+        endDate: item.endDate,
+        sTs: s,
+        eTs: e,
+        progress: item.progress || 0,
+        completed: item.completed,
+        status: item.completed ? 'Acheve' : (item.progress && item.progress > 0 ? `${item.progress}%` : 'A faire')
+      });
     });
+  });
+
+  if (allGanttItems.length > 0) {
+    drawSectionHeader(`${sectionCounter++}. Planification & Diagramme de Gantt`);
+    
+    // 1. Table
+    const milestoneTableData = allGanttItems.map(m => [
+      sanitizePdfText(m.name),
+      sanitizePdfText(m.phase),
+      m.type,
+      m.endDate || m.startDate || 'N/A',
+      `${m.progress}%`,
+      m.status
+    ]);
 
     autoTable(doc, {
       startY: currentY,
-      head: [['Risque identifié', 'Prob. / Impact', 'Gravité', 'Plan de mitigation / Action', 'Pilote']],
-      body: risksData,
-      headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
-      alternateRowStyles: { fillColor: [254, 242, 242] },
-      styles: { fontSize: 7.5, cellPadding: 2.5 },
+      head: [['Jalon / Livrable', 'Phase', 'Type', 'Echeance', 'Avancement', 'Statut']],
+      body: milestoneTableData,
+      headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      styles: { fontSize: 7.5, cellPadding: 2.2 },
       columnStyles: {
-        0: { cellWidth: 50, fontStyle: 'bold' },
-        1: { cellWidth: 25, halign: 'center' },
-        2: { cellWidth: 20, halign: 'center' },
-        3: { cellWidth: 60 },
-        4: { cellWidth: 27 }
+        0: { cellWidth: 55, fontStyle: 'bold' },
+        1: { cellWidth: 40 },
+        2: { cellWidth: 20 },
+        3: { cellWidth: 25 },
+        4: { cellWidth: 20, halign: 'center' },
+        5: { cellWidth: 22, halign: 'center' }
       },
       margin: { left: 14, right: 14 }
     });
     currentY = (doc as any).lastAutoTable.finalY + 6;
+
+    // 2. Visuel Gantt
+    checkPageBreak(45);
+    let minTs = ganttTimestamps.length > 0 ? Math.min(...ganttTimestamps) : Date.now();
+    let maxTs = ganttTimestamps.length > 0 ? Math.max(...ganttTimestamps) : Date.now() + 60 * 86400000;
+    if (maxTs <= minTs) maxTs = minTs + 30 * 86400000;
+    const totalRange = maxTs - minTs;
+
+    const leftColW = 55;
+    const timeStartX = 14 + leftColW;
+    const timeW = contentWidth - leftColW;
+
+    // Timeline Header
+    doc.setFillColor(15, 23, 42); // Slate 900
+    doc.rect(14, currentY, contentWidth, 6, 'F');
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text('CALENDRIER GANTT', 18, currentY + 4.2);
+
+    doc.setTextColor(203, 213, 225);
+    for (let i = 0; i <= 4; i++) {
+      const tickTs = minTs + (i / 4) * totalRange;
+      const tickX = timeStartX + (i / 4) * timeW;
+      const dStr = formatGanttDate(tickTs);
+      const align = i === 0 ? 'left' : i === 4 ? 'right' : 'center';
+      doc.text(dStr, i === 0 ? tickX + 1 : i === 4 ? tickX - 1 : tickX, currentY + 4.2, { align });
+    }
+    currentY += 6.2;
+
+    // Timeline Rows per phase & items
+    ganttPhases.forEach(phase => {
+      const items = phase.items || [];
+      if (items.length === 0) return;
+
+      checkPageBreak(12);
+      doc.setFillColor(30, 41, 59);
+      doc.rect(14, currentY, contentWidth, 5, 'F');
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(251, 191, 36);
+      doc.text(`LOT : ${sanitizePdfText(phase.name.toUpperCase())}`, 18, currentY + 3.5);
+      currentY += 5.2;
+
+      items.forEach(item => {
+        checkPageBreak(5.5);
+        doc.setFillColor(248, 250, 252);
+        doc.rect(14, currentY, contentWidth, 5, 'F');
+        doc.setDrawColor(226, 232, 240);
+        doc.line(14, currentY + 5, 14 + contentWidth, currentY + 5);
+
+        for (let i = 1; i <= 3; i++) {
+          const gx = timeStartX + (i / 4) * timeW;
+          doc.line(gx, currentY, gx, currentY + 5);
+        }
+
+        doc.setFontSize(6);
+        doc.setFont('helvetica', item.type === 'milestone' ? 'bold' : 'normal');
+        doc.setTextColor(item.type === 'milestone' ? 79 : 30, item.type === 'milestone' ? 70 : 41, item.type === 'milestone' ? 229 : 59);
+        const tName = item.name.length > 28 ? item.name.slice(0, 26) + '..' : item.name;
+        doc.text(item.type === 'milestone' ? `* ${tName}` : tName, 16, currentY + 3.4);
+
+        const s = parseProjectDate(item.startDate) || minTs;
+        const e = parseProjectDate(item.endDate) || s + 86400000;
+        const sClamped = Math.max(minTs, Math.min(maxTs, s));
+        const eClamped = Math.max(minTs, Math.min(maxTs, e));
+        const bx = timeStartX + ((sClamped - minTs) / totalRange) * timeW;
+        const ex = timeStartX + ((eClamped - minTs) / totalRange) * timeW;
+        const bw = Math.max(2.5, ex - bx);
+
+        if (item.type === 'milestone') {
+          doc.setFillColor(236, 72, 153);
+          doc.triangle(bx, currentY + 1.2, bx - 2, currentY + 3.5, bx + 2, currentY + 3.5, 'F');
+          doc.triangle(bx, currentY + 4.8, bx - 2, currentY + 3.5, bx + 2, currentY + 3.5, 'F');
+        } else {
+          const isDone = item.completed || item.progress === 100;
+          doc.setFillColor(isDone ? 16 : 99, isDone ? 185 : 102, isDone ? 129 : 241);
+          doc.roundedRect(bx, currentY + 1.2, bw, 2.6, 0.6, 0.6, 'F');
+          if (item.progress && item.progress > 0 && !isDone) {
+            doc.setFillColor(16, 185, 129);
+            doc.roundedRect(bx, currentY + 1.2, (bw * item.progress) / 100, 2.6, 0.6, 0.6, 'F');
+          }
+        }
+        currentY += 5.2;
+      });
+    });
+    currentY += 4;
   }
 
-  // MODULE 6: Synthèse Budgétaire & Dépenses
+  // ==========================================
+  // 7. LE BUDGET (AVEC CAMEMBERTS GROUPES ET DEPENSES)
+  // ==========================================
   const budgetGroups = project.budgetGroups || [];
   const totalPlannedFromGroups = budgetGroups.reduce((acc, g) => acc + (g.expenses || []).reduce((s, e) => s + (e.planned || 0), 0), 0);
   const totalSpentFromGroups = budgetGroups.reduce((acc, g) => acc + (g.expenses || []).reduce((s, e) => s + (e.spent || 0), 0), 0);
   const effectiveSpent = spentBudget || totalSpentFromGroups;
-  const hasBudgetData = totalBudget > 0 || effectiveSpent > 0 || totalPlannedFromGroups > 0 || budgetGroups.some(g => (g.expenses || []).length > 0);
+  const hasBudgetData = Boolean(totalBudget > 0 || effectiveSpent > 0 || totalPlannedFromGroups > 0 || budgetGroups.some(g => (g.expenses || []).length > 0));
 
   if (hasBudgetData) {
-    drawSectionHeader(`${sectionCounter++}. Suivi Budgétaire & Dépenses`, [15, 118, 110]);
+    drawSectionHeader(`${sectionCounter++}. Suivi Budgetaire & Graphiques de Repartition`, [15, 118, 110]);
     const remainingBudget = totalBudget - effectiveSpent;
     const budgetSummaryRow = [
       [
@@ -1711,13 +2063,13 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
         formatEuro(totalPlannedFromGroups),
         formatEuro(effectiveSpent),
         formatEuro(remainingBudget),
-        remainingBudget < 0 ? 'Dépassement' : 'Sous contrôle'
+        remainingBudget < 0 ? 'Depassement' : 'Sous controle'
       ]
     ];
 
     autoTable(doc, {
       startY: currentY,
-      head: [['Budget Alloué (Cadrage)', 'Total Prévu', 'Budget Consommé (Réel)', 'Solde Restant', 'Statut']],
+      head: [['Budget Alloue (Cadrage)', 'Total Prevu', 'Budget Consomme (Reel)', 'Solde Restant', 'Statut']],
       body: budgetSummaryRow,
       headStyles: { fillColor: [15, 118, 110], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
       styles: { fontSize: 7.5, cellPadding: 2.5, halign: 'center' },
@@ -1725,14 +2077,13 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
     });
     currentY = (doc as any).lastAutoTable.finalY + 4;
 
-    // Breakdown per budget group if available
     if (budgetGroups.length > 0) {
       const groupRows = budgetGroups.map(g => {
         const gPlanned = (g.expenses || []).reduce((acc, e) => acc + (e.planned || 0), 0);
         const gSpent = (g.expenses || []).reduce((acc, e) => acc + (e.spent || 0), 0);
         return [
           sanitizePdfText(g.title || g.name),
-          `${(g.expenses || []).length} dépense(s)`,
+          `${(g.expenses || []).length} depense(s)`,
           formatEuro(gPlanned),
           formatEuro(gSpent),
           formatEuro(gPlanned - gSpent)
@@ -1742,7 +2093,7 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
       checkPageBreak(25);
       autoTable(doc, {
         startY: currentY,
-        head: [['Poste Budgétaire', 'Lignes', 'Montant Prévu', 'Montant Consommé', 'Écart']],
+        head: [['Poste Budgetaire', 'Lignes', 'Montant Prevu', 'Montant Consomme', 'Ecart']],
         body: groupRows,
         headStyles: { fillColor: [45, 140, 130], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
         styles: { fontSize: 7.5, cellPadding: 2.5 },
@@ -1751,51 +2102,49 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
       });
       currentY = (doc as any).lastAutoTable.finalY + 6;
     }
+
+    // Camemberts en canvas (Groupes et Depenses)
+    const charts = generateBudgetPieCharts(budgetGroups);
+    if (charts.groupsImg || charts.expensesImg) {
+      checkPageBreak(56);
+      const chartW = (contentWidth - 6) / 2; // ~88 mm
+      const chartH = 48;
+
+      if (charts.groupsImg && charts.expensesImg) {
+        doc.addImage(charts.groupsImg, 'PNG', 14, currentY, chartW, chartH);
+        doc.addImage(charts.expensesImg, 'PNG', 14 + chartW + 6, currentY, chartW, chartH);
+        currentY += chartH + 6;
+      } else if (charts.groupsImg) {
+        doc.addImage(charts.groupsImg, 'PNG', 14 + (contentWidth - 110) / 2, currentY, 110, chartH);
+        currentY += chartH + 6;
+      } else if (charts.expensesImg) {
+        doc.addImage(charts.expensesImg, 'PNG', 14 + (contentWidth - 110) / 2, currentY, 110, chartH);
+        currentY += chartH + 6;
+      }
+    }
   }
 
-  // MODULE 7: Matrice de Décision & Arbitrages
-  const decisions = project.decisionMatrix || [];
-  if (decisions.length > 0) {
-    drawSectionHeader(`${sectionCounter++}. Matrice de Décision & Arbitrages`);
-    const decisionRows = decisions.map((d, idx) => {
-      const chosenOpt = (d.options || []).find(o => o.id === d.selectedOptionId);
-      return [
-        `D-${idx + 1} : ${d.title}`,
-        d.date || '-',
-        d.status.toUpperCase(),
-        chosenOpt ? `Option choisie : ${chosenOpt.name}` : (d.description || '-'),
-        d.selectedOptionId ? 'Validé' : 'À trancher'
-      ];
-    });
+  // ==========================================
+  // 8. LA COMMUNICATION ET LA GOUVERNANCE
+  // ==========================================
+  const meetings = (project.governanceMeetings || project.meetings || []).filter(m => (m.title && m.title.trim().length > 0) || m.frequency || m.date);
+  const comms = (project.staffCommunications || []).filter(c => (c.title && c.title.trim().length > 0) || c.targetAudience);
+  const hasGovOrComms = meetings.length > 0 || comms.length > 0 || Boolean(project.meetingSchedule?.frequency);
 
-    autoTable(doc, {
-      startY: currentY,
-      head: [['Décision / Objet', 'Date', 'Statut', 'Option Retenue / Détail', 'Validation']],
-      body: decisionRows,
-      headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
-      styles: { fontSize: 7.5, cellPadding: 2.5 },
-      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 } },
-      margin: { left: 14, right: 14 }
-    });
-    currentY = (doc as any).lastAutoTable.finalY + 6;
-  }
+  if (hasGovOrComms) {
+    drawSectionHeader(`${sectionCounter++}. Gouvernance, Comites & Communication`);
 
-  // MODULE 8: Gouvernance & Comités de Pilotage
-  const meetings = project.governanceMeetings || project.meetings || [];
-  const comms = project.staffCommunications || [];
-  if (meetings.length > 0 || comms.length > 0 || project.meetingSchedule?.frequency) {
-    drawSectionHeader(`${sectionCounter++}. Gouvernance, Comités & Communication`);
-    const meetRows = meetings.map(m => [
-      m.title || 'Comité',
-      m.frequency || m.date || 'Régulier',
-      m.objectives || 'Pilotage stratégique / opérationnel',
-      m.status === 'done' ? 'Tenu' : 'Programmé'
-    ]);
+    if (meetings.length > 0) {
+      const meetRows = meetings.map(m => [
+        sanitizePdfText(m.title) || 'Comite',
+        m.frequency || m.date || 'Regulier',
+        sanitizePdfText(m.objectives) || 'Pilotage strategique / operationnel',
+        m.status === 'done' ? 'Tenu' : 'Programme'
+      ]);
 
-    if (meetRows.length > 0) {
       autoTable(doc, {
         startY: currentY,
-        head: [['Instance / Comité', 'Périodicité / Date', 'Objectifs & Ordre du jour', 'Statut']],
+        head: [['Instance / Comite', 'Periodicite / Date', 'Objectifs & Ordre du jour', 'Statut']],
         body: meetRows,
         headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
         styles: { fontSize: 7.5, cellPadding: 2.5 },
@@ -1803,17 +2152,39 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
       });
       currentY = (doc as any).lastAutoTable.finalY + 6;
     }
+
+    if (comms.length > 0) {
+      checkPageBreak(25);
+      const commRows = comms.map(c => [
+        sanitizePdfText(c.title) || 'Action de communication',
+        sanitizePdfText(c.targetAudience || c.audience) || 'Tous',
+        c.date || '-',
+        c.status === 'done' || c.status === 'sent' ? 'Diffuse' : 'A venir'
+      ]);
+
+      autoTable(doc, {
+        startY: currentY,
+        head: [['Action de Communication', 'Cible / Destinataires', 'Date', 'Statut']],
+        body: commRows,
+        headStyles: { fillColor: [99, 102, 241], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+        styles: { fontSize: 7.5, cellPadding: 2.5 },
+        margin: { left: 14, right: 14 }
+      });
+      currentY = (doc as any).lastAutoTable.finalY + 6;
+    }
   }
 
-  // MODULE 9: KPIs & Indicateurs Clés de Performance
-  const kpis = project.kpis || [];
+  // ==========================================
+  // 9. LES KPI
+  // ==========================================
+  const kpis = (project.kpis || []).filter(k => (k.name && k.name.trim().length > 0) || k.targetValue);
   if (kpis.length > 0) {
-    drawSectionHeader(`${sectionCounter++}. Indicateurs Clés de Performance (KPIs)`);
+    drawSectionHeader(`${sectionCounter++}. Indicateurs Cles de Performance (KPIs)`);
     const kpiRows = kpis.map(k => {
       const scoreVal = k.status ?? (k.statusScore === 'ok' ? 100 : k.statusScore === 'warning' ? 50 : 25);
       const scoreBadge = scoreVal >= 80 ? 'Conforme (Vert)' : scoreVal >= 50 ? 'Vigilance (Orange)' : 'Alerte (Rouge)';
       return [
-        k.name,
+        sanitizePdfText(k.name),
         k.metricType || 'Nombre',
         k.targetValue || '-',
         k.currentValue || '-',
@@ -1834,69 +2205,110 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
     currentY = (doc as any).lastAutoTable.finalY + 6;
   }
 
-  // MODULE 10: Clôture & Retour d'Expérience (REX)
-  const rexItems = project.rexItems || [];
+  // ==========================================
+  // 10. LA CLOTURE
+  // ==========================================
   const closureData = project.closureData;
-  const hasClosureOrRex = Boolean(closureData?.isClosed || closureData?.finalSummary || rexItems.length > 0);
+  const hasClosure = Boolean(closureData && (closureData.isClosed || closureData.finalSummary || closureData.signoffName || closureData.deliverablesValidated || closureData.acceptanceSigned));
 
-  if (hasClosureOrRex) {
-    drawSectionHeader(`${sectionCounter++}. Bilan de Clôture & Retour d'Expérience (REX)`);
-    if (closureData?.finalSummary) {
+  if (hasClosure && closureData) {
+    drawSectionHeader(`${sectionCounter++}. Bilan de Cloture du Projet`);
+    
+    // Status banner
+    doc.setFillColor(closureData.isClosed ? 220 : 241, closureData.isClosed ? 252 : 245, closureData.isClosed ? 231 : 249);
+    doc.roundedRect(14, currentY, contentWidth, 8, 1.5, 1.5, 'F');
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(closureData.isClosed ? 22 : 71, closureData.isClosed ? 101 : 85, closureData.isClosed ? 52 : 105);
+    doc.text(
+      closureData.isClosed ? 'STATUT : PROJET OFFICIELLEMENT CLOTURE' : 'STATUT : BILAN DE CLOTURE EN COURS',
+      18,
+      currentY + 5.2
+    );
+    currentY += 11;
+
+    // Check items table
+    const checkRows = [
+      ['Livrables et exigences projet valides', closureData.deliverablesValidated ? 'Valide [OK]' : 'Non valide'],
+      ['Proces-Verbal (PV) de recette signe par le client/metier', closureData.acceptanceSigned ? 'Valide [OK]' : 'Non valide'],
+      ['Transfert de competences et passage au support/RUN effectue', closureData.supportTransferred ? 'Valide [OK]' : 'Non valide'],
+      ['Cloture administrative et revocation des acces temporaires', closureData.accessRevoked ? 'Valide [OK]' : 'Non valide']
+    ];
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Jalon / Critere de Cloture Obligatoire', 'Etat de validation']],
+      body: checkRows,
+      headStyles: { fillColor: [51, 65, 85], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+      styles: { fontSize: 7.5, cellPadding: 2.2 },
+      columnStyles: { 0: { cellWidth: 140 }, 1: { cellWidth: 42, halign: 'center', fontStyle: 'bold' } },
+      margin: { left: 14, right: 14 }
+    });
+    currentY = (doc as any).lastAutoTable.finalY + 5;
+
+    if (closureData.finalSummary && closureData.finalSummary.trim()) {
+      checkPageBreak(15);
       doc.setFontSize(7.5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(51, 65, 85);
-      const splitClosure = doc.splitTextToSize(`Bilan Final : ${closureData.finalSummary}`, contentWidth - 8);
+      const splitClosure = doc.splitTextToSize(`Synthese du bilan : ${sanitizePdfText(closureData.finalSummary)}`, contentWidth - 8);
       doc.text(splitClosure, 18, currentY + 2);
       currentY += Math.max(8, splitClosure.length * 4 + 2);
     }
 
-    if (rexItems.length > 0) {
-      const rexRows = rexItems.map(r => {
-        const catLabel = r.category === 'success' ? 'Succès / Point fort' : r.category === 'issue' ? 'Difficulté' : 'Recommandation';
-        return [
-          r.title,
-          catLabel,
-          r.description || '-',
-          r.author || 'Équipe'
-        ];
-      });
-
-      checkPageBreak(25);
-      autoTable(doc, {
-        startY: currentY,
-        head: [['Sujet REX', 'Catégorie', 'Enseignements & Recommandations', 'Auteur']],
-        body: rexRows,
-        headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
-        styles: { fontSize: 7.5, cellPadding: 2.5 },
-        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 }, 1: { cellWidth: 35 } },
-        margin: { left: 14, right: 14 }
-      });
-      currentY = (doc as any).lastAutoTable.finalY + 6;
+    if (closureData.signoffName) {
+      checkPageBreak(12);
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(14, currentY, contentWidth, 9, 1.5, 1.5, 'F');
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 41, 59);
+      doc.text(`Signataire : ${sanitizePdfText(closureData.signoffName)} (${sanitizePdfText(closureData.signoffRole || 'Commanditaire')})  •  Date : ${closureData.signoffDate || 'N/A'}`, 18, currentY + 5.5);
+      currentY += 12;
     }
   }
 
-  // MODULE 11: Documents & Livrables du Projet
-  const projectDocs = project.projectDocuments || [];
-  if (projectDocs.length > 0) {
-    drawSectionHeader(`${sectionCounter++}. Documents & Livrables Officiels`);
-    const docRows = projectDocs.map(d => [
-      d.name,
-      d.category || 'Général',
-      d.version || 'v1.0',
-      d.uploadedAt || '-',
-      d.uploadedBy || 'Chef de projet'
-    ]);
+  // ==========================================
+  // 11. LE RETOUR D'EXPERIENCE (REX)
+  // ==========================================
+  const rexItems = (project.rexItems || []).filter(r => (r.title && r.title.trim().length > 0) || r.description);
+  if (rexItems.length > 0) {
+    drawSectionHeader(`${sectionCounter++}. Retour d'Experience (REX)`);
+    const rexRows = rexItems.map(r => {
+      const catLabel = r.category === 'success' ? 'Succes / Point fort' : r.category === 'issue' ? 'Difficulte' : 'Recommandation';
+      return [
+        sanitizePdfText(r.title),
+        catLabel,
+        sanitizePdfText(r.description) || '-',
+        sanitizePdfText(r.author) || 'Equipe'
+      ];
+    });
 
     autoTable(doc, {
       startY: currentY,
-      head: [['Document / Livrable', 'Catégorie', 'Version', 'Date de Dépôt', 'Auteur']],
-      body: docRows,
+      head: [['Sujet REX', 'Categorie', 'Enseignements & Recommandations', 'Auteur']],
+      body: rexRows,
       headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
       styles: { fontSize: 7.5, cellPadding: 2.5 },
-      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 } },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 45 }, 1: { cellWidth: 35 } },
       margin: { left: 14, right: 14 }
     });
     currentY = (doc as any).lastAutoTable.finalY + 6;
+  }
+
+  // Si aucun module n'est rempli, afficher un message d'information
+  if (sectionCounter === 1) {
+    checkPageBreak(25);
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(14, currentY, contentWidth, 20, 2, 2, 'FD');
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(100, 116, 139);
+    doc.text('Aucun module renseigne pour ce projet.', 18, currentY + 8);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Renseignez les parties prenantes, les risques, le budget, la planification ou les KPIs pour alimenter cette synthese.', 18, currentY + 14);
+    currentY += 25;
   }
 
   addPdfFooter(doc, project, 'Synthèse Exécutive & Revue de Direction');
