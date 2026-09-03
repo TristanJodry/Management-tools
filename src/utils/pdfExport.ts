@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Project, TeamMember, DecisionItem, RexItem, Kpi, BudgetGroup } from '../types';
+import { Project, TeamMember, DecisionItem, DecisionOption, RexItem, Kpi, BudgetGroup } from '../types';
 
 // Helper to format currency
 const formatEuro = (val: number) => {
@@ -194,6 +194,322 @@ function generateBudgetPieCharts(budgetGroups: BudgetGroup[]): { groupsImg: stri
   };
 }
 
+// 5x5 Risk Matrix Canvas graphic generator
+export function generateRiskMatrixCanvasDataUrl(risks: any[]): string | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    const width = 800;
+    const height = 500;
+    const canvas = document.createElement('canvas');
+    canvas.width = width * 2; // Retina 2x
+    canvas.height = height * 2;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.scale(2, 2);
+
+    // Dark background container matching the app tool
+    ctx.fillStyle = '#0f172a';
+    if (typeof (ctx as any).roundRect === 'function') {
+      (ctx as any).roundRect(0, 0, width, height, 14);
+      ctx.fill();
+    } else {
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    // Title
+    ctx.font = 'bold 14px Helvetica, Arial, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText('MATRICE DES RISQUES : IMPACT VS PROBABILITÉ', width / 2, 32);
+
+    // Axis definitions
+    const impacts = [5, 4, 3, 2, 1];
+    const probabilities = [1, 2, 3, 4, 5];
+    const impactLabels: Record<number, string> = {
+      5: '5 - Critique',
+      4: '4 - Élevé',
+      3: '3 - Moyen',
+      2: '2 - Faible',
+      1: '1 - Mineur'
+    };
+    const probLabels: Record<number, string> = {
+      1: 'P1',
+      2: 'P2',
+      3: 'P3',
+      4: 'P4',
+      5: 'P5'
+    };
+
+    // Grid geometry
+    const gridX = 135;
+    const gridY = 52;
+    const gridW = width - gridX - 25;
+    const gridH = height - gridY - 50;
+    const cellW = (gridW - (4 * 7)) / 5;
+    const cellH = (gridH - (4 * 7)) / 5;
+
+    // Y-Axis label (Rotated text on left)
+    ctx.save();
+    ctx.translate(24, gridY + gridH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
+    ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'center';
+    ctx.fillText('← IMPACT (GRAVITÉ)', 0, 0);
+    ctx.restore();
+
+    // X-Axis label at bottom
+    ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
+    ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'center';
+    ctx.fillText('PROBABILITÉ (FRÉQUENCE) →', gridX + gridW / 2, height - 12);
+
+    // Draw grid cells & Y-axis row labels
+    impacts.forEach((imp, rowIdx) => {
+      const y = gridY + rowIdx * (cellH + 7);
+
+      // Y-axis label
+      ctx.font = 'bold 10.5px Helvetica, Arial, sans-serif';
+      ctx.fillStyle = '#cbd5e1';
+      ctx.textAlign = 'right';
+      ctx.fillText(impactLabels[imp], gridX - 10, y + cellH / 2 + 4);
+
+      probabilities.forEach((prob, colIdx) => {
+        const x = gridX + colIdx * (cellW + 7);
+        const score = imp * prob;
+
+        // Cell background color and borders based on score
+        let cellBg = '#ecfdf5'; // emerald (1-4)
+        let cellBorder = '#a7f3d0';
+        let scoreTextColor = '#065f46';
+        let badgeBg = '#059669';
+
+        if (score >= 15) {
+          cellBg = '#ffe4e6'; // rose (15-25)
+          cellBorder = '#fecdd3';
+          scoreTextColor = '#9f1239';
+          badgeBg = '#e11d48';
+        } else if (score >= 10) {
+          cellBg = '#fef3c7'; // amber (10-14)
+          cellBorder = '#fde68a';
+          scoreTextColor = '#92400e';
+          badgeBg = '#d97706';
+        } else if (score >= 5) {
+          cellBg = '#fefce8'; // yellow (5-9)
+          cellBorder = '#fef08a';
+          scoreTextColor = '#854d0e';
+          badgeBg = '#ca8a04';
+        }
+
+        // Draw rounded cell
+        ctx.fillStyle = cellBg;
+        ctx.strokeStyle = cellBorder;
+        ctx.lineWidth = 1.2;
+        if (typeof (ctx as any).roundRect === 'function') {
+          (ctx as any).roundRect(x, y, cellW, cellH, 6);
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          ctx.fillRect(x, y, cellW, cellH);
+          ctx.strokeRect(x, y, cellW, cellH);
+        }
+
+        // Draw Score label inside cell (top left)
+        ctx.font = 'bold 9.5px Helvetica, Arial, sans-serif';
+        ctx.fillStyle = scoreTextColor;
+        ctx.textAlign = 'left';
+        ctx.fillText(`Score: ${score}`, x + 6, y + 14);
+
+        // Find risks in this cell
+        const cellRisks = (risks || []).filter(r => (r.prob || 1) === prob && (r.impact || 1) === imp);
+
+        if (cellRisks.length > 0) {
+          // Count pill at top right of cell
+          ctx.fillStyle = '#0f172a';
+          const pillW = 16;
+          const pillH = 13;
+          const pillX = x + cellW - pillW - 5;
+          const pillY = y + 5;
+          if (typeof (ctx as any).roundRect === 'function') {
+            (ctx as any).roundRect(pillX, pillY, pillW, pillH, 3);
+            ctx.fill();
+          } else {
+            ctx.fillRect(pillX, pillY, pillW, pillH);
+          }
+          ctx.font = 'bold 8.5px Helvetica, Arial, sans-serif';
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${cellRisks.length}`, pillX + pillW / 2, pillY + 9.5);
+
+          // Draw risk pills inside cell
+          let badgeY = y + 21;
+          const maxBadges = Math.min(cellRisks.length, 2);
+          for (let b = 0; b < maxBadges; b++) {
+            const risk = cellRisks[b];
+            const bWidth = cellW - 12;
+            const bHeight = 17;
+            ctx.fillStyle = badgeBg;
+            if (typeof (ctx as any).roundRect === 'function') {
+              (ctx as any).roundRect(x + 6, badgeY, bWidth, bHeight, 4);
+              ctx.fill();
+            } else {
+              ctx.fillRect(x + 6, badgeY, bWidth, bHeight);
+            }
+            ctx.font = 'bold 8.5px Helvetica, Arial, sans-serif';
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'left';
+            const text = risk.desc || 'Risque';
+            const truncated = text.length > 17 ? text.slice(0, 15) + '...' : text;
+            ctx.fillText(truncated, x + 9, badgeY + 11.5);
+            badgeY += 19;
+          }
+        }
+      });
+    });
+
+    // Draw X-axis column labels at bottom (P1 to P5)
+    probabilities.forEach((prob, colIdx) => {
+      const x = gridX + colIdx * (cellW + 7) + cellW / 2;
+      ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
+      ctx.fillStyle = '#cbd5e1';
+      ctx.textAlign = 'center';
+      ctx.fillText(probLabels[prob], x, gridY + gridH + 16);
+    });
+
+    return canvas.toDataURL('image/png');
+  } catch (err) {
+    console.error('Erreur génération matrice de risque canvas:', err);
+    return null;
+  }
+}
+
+// Decision Matrix comparative table renderer matching UI screenshot
+export function renderDecisionMatrixTable(
+  doc: jsPDF,
+  decision: DecisionItem,
+  startY: number
+): number {
+  const criteria = decision.criteria || [];
+  const decisionOptions = decision.options || [];
+
+  if (criteria.length === 0 || decisionOptions.length === 0) {
+    autoTable(doc, {
+      startY,
+      head: [['Décision', 'Statut', 'Détails']],
+      body: [[
+        sanitizePdfText(decision.title),
+        decision.status ? decision.status.toUpperCase() : 'EN COURS',
+        sanitizePdfText(decision.description) || 'Aucun critère ou option configuré'
+      ]],
+      headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+      styles: { fontSize: 7.5, cellPadding: 3 },
+      margin: { left: 14, right: 14 }
+    });
+    return (doc as any).lastAutoTable.finalY + 6;
+  }
+
+  // Calculate scores per option
+  const calculateTotalScore = (opt: DecisionOption) => {
+    let totalWeight = 0;
+    let weightedSum = 0;
+    criteria.forEach((c) => {
+      const score = opt.scores?.[c.id] ?? 0;
+      weightedSum += score * (c.weight || 1);
+      totalWeight += (c.weight || 1);
+    });
+    if (totalWeight === 0) return 0;
+    return Math.round((weightedSum / (totalWeight * 10)) * 100);
+  };
+
+  const winningOptionId = decision.selectedOptionId;
+  const winningColIndex = decisionOptions.findIndex(o => o.id === winningOptionId) + 1;
+
+  // Header: CRITÈRES (POIDS) | OPTION 1 | OPTION 2 ...
+  const headRow = [
+    'CRITÈRES (POIDS)',
+    ...decisionOptions.map(opt => {
+      const isChosen = opt.id === winningOptionId;
+      return isChosen
+        ? `${sanitizePdfText(opt.name.toUpperCase())}\n[★ OPTION RETENUE]`
+        : sanitizePdfText(opt.name.toUpperCase());
+    })
+  ];
+
+  // Criterion rows:
+  const bodyRows: any[] = criteria.map(c => {
+    const row = [`${sanitizePdfText(c.name)} (P: ${c.weight})`];
+    decisionOptions.forEach(opt => {
+      const score = opt.scores?.[c.id] ?? 0;
+      row.push(`${score} / 10`);
+    });
+    return row;
+  });
+
+  // Summary row at bottom:
+  const summaryRow = [
+    'SCORE GLOBAL PONDÉRÉ',
+    ...decisionOptions.map(opt => {
+      const score = calculateTotalScore(opt);
+      const isChosen = opt.id === winningOptionId;
+      return isChosen ? `${score} / 100\n[✓ RETENUE]` : `${score} / 100`;
+    })
+  ];
+  bodyRows.push(summaryRow);
+
+  autoTable(doc, {
+    startY,
+    head: [headRow],
+    body: bodyRows,
+    headStyles: {
+      fillColor: [30, 41, 59], // Dark slate header matching screenshot
+      textColor: 255,
+      fontStyle: 'bold',
+      fontSize: 7.5,
+      halign: 'center',
+      valign: 'middle'
+    },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    styles: { fontSize: 7.5, cellPadding: 3, halign: 'center', valign: 'middle' },
+    columnStyles: {
+      0: { halign: 'left', fontStyle: 'bold', cellWidth: 50, fillColor: [241, 245, 249] }
+    },
+    didParseCell: (data) => {
+      // Highlight winning option column
+      if (winningColIndex > 0 && data.column.index === winningColIndex) {
+        if (data.section === 'head') {
+          data.cell.styles.fillColor = [22, 101, 52]; // Dark emerald
+          data.cell.styles.textColor = [220, 252, 231];
+        } else if (data.section === 'body') {
+          if (data.row.index === bodyRows.length - 1) {
+            data.cell.styles.fillColor = [220, 252, 231];
+            data.cell.styles.textColor = [22, 101, 52];
+            data.cell.styles.fontStyle = 'bold';
+          } else {
+            data.cell.styles.fillColor = [240, 253, 244];
+            data.cell.styles.fontStyle = 'bold';
+            data.cell.styles.textColor = [22, 101, 52];
+          }
+        }
+      }
+      // Style bottom summary row
+      if (data.section === 'body' && data.row.index === bodyRows.length - 1) {
+        data.cell.styles.fontStyle = 'bold';
+        if (data.column.index === 0) {
+          data.cell.styles.fillColor = [226, 232, 240];
+          data.cell.styles.textColor = [30, 41, 59];
+        } else if (data.column.index !== winningColIndex) {
+          data.cell.styles.fillColor = [241, 245, 249];
+          data.cell.styles.textColor = [71, 85, 105];
+        }
+      }
+    },
+    margin: { left: 14, right: 14 }
+  });
+
+  return (doc as any).lastAutoTable.finalY + 6;
+}
+
 // Common header generator
 function addPdfHeader(
   doc: jsPDF,
@@ -384,7 +700,7 @@ export function exportStakeholdersPDF(project: Project, globalTeam: TeamMember[]
 
 // 2. Export Matrice de Décision PDF
 export function exportDecisionMatrixPDF(project: Project) {
-  const doc = new jsPDF('l', 'mm', 'a4'); // Landscape for rich matrix
+  const doc = new jsPDF('l', 'mm', 'a4'); // Landscape for rich comparative matrix
   addPdfHeader(doc, project, 'Matrice de Décision & Arbitrages', 'l');
 
   let currentY = 36;
@@ -405,52 +721,15 @@ export function exportDecisionMatrixPDF(project: Project) {
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(30, 41, 59);
-      doc.text(`Décision ${idx + 1} : ${dec.title}`, 14, currentY);
+      doc.text(`Décision ${idx + 1} : ${sanitizePdfText(dec.title)}`, 14, currentY);
 
       doc.setFontSize(8.5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(100, 116, 139);
-      doc.text(`Date : ${dec.date || 'N/A'} | Statut : ${dec.status.toUpperCase()} | ${dec.description || ''}`, 14, currentY + 5);
+      doc.text(`Date : ${dec.date || 'N/A'} | Statut : ${dec.status.toUpperCase()} | ${sanitizePdfText(dec.description) || ''}`, 14, currentY + 5);
 
       currentY += 10;
-
-      // Prepare table headers: Option | Crit 1 (w) | Crit 2 (w) ... | Total Pondéré | Recommandation
-      const critHeaders = (dec.criteria || []).map(c => `${c.name}\n(poids: ${c.weight})`);
-      const head = [['Option / Solution', ...critHeaders, 'Score Total', 'Statut / Choix']];
-
-      const body = (dec.options || []).map((opt) => {
-        let totalScore = 0;
-        let maxPossible = 0;
-        const scoresCols = (dec.criteria || []).map((c) => {
-          const s = opt.scores?.[c.id] ?? 0;
-          totalScore += s * (c.weight || 1);
-          maxPossible += 10 * (c.weight || 1);
-          return `${s}/10`;
-        });
-
-        const scorePercent = maxPossible > 0 ? Math.round((totalScore / maxPossible) * 100) : 0;
-        const isChosen = dec.selectedOptionId === opt.id;
-        return [
-          sanitizePdfText(opt.name) + (opt.notes ? `\n(${sanitizePdfText(opt.notes)})` : ''),
-          ...scoresCols,
-          `${totalScore} pts (${scorePercent}%)`,
-          isChosen ? '[RETENUE]' : '-'
-        ];
-      });
-
-      autoTable(doc, {
-        startY: currentY,
-        head: head,
-        body: body.length > 0 ? body : [['Aucune option évaluée', ...critHeaders.map(() => '-'), '-', '-']],
-        headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 8 },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
-        styles: { fontSize: 7.5, cellPadding: 3, halign: 'center' },
-        columnStyles: {
-          0: { halign: 'left', fontStyle: 'bold', cellWidth: 55 },
-          [head[0].length - 1]: { fontStyle: 'bold', textColor: [67, 56, 202] }
-        },
-        margin: { left: 14, right: 14 }
-      });
+      currentY = renderDecisionMatrixTable(doc, dec, currentY);
     });
   }
 
@@ -1065,10 +1344,17 @@ export function exportRaciPDF(project: Project, globalTeam: TeamMember[] = []) {
     return [sanitizePdfText(rawActName), ...assignedCols];
   });
 
+  // Filter out duplicate or unassigned rows where all columns are empty
+  const filledBody = body.filter((row) => {
+    const cols = row.slice(1);
+    return cols.some(c => c && c !== '-');
+  });
+  const finalBody = filledBody.length > 0 ? filledBody : body;
+
   autoTable(doc, {
     startY: currentY,
     head: [headCols],
-    body: body,
+    body: finalBody,
     headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 8, halign: 'center' },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     styles: { fontSize: 8, cellPadding: 3, halign: 'center' },
@@ -1091,9 +1377,9 @@ export function exportRisksPDF(project: Project) {
   const risks = project.risksRegister || project.risks || [];
 
   // Summary header metrics
-  const highRisks = risks.filter(r => (r.prob * r.impact) >= 12).length;
-  const medRisks = risks.filter(r => (r.prob * r.impact) >= 6 && (r.prob * r.impact) < 12).length;
-  const lowRisks = risks.filter(r => (r.prob * r.impact) < 6).length;
+  const highRisks = risks.filter(r => ((r.prob || 1) * (r.impact || 1)) >= 15).length;
+  const medRisks = risks.filter(r => ((r.prob || 1) * (r.impact || 1)) >= 5 && ((r.prob || 1) * (r.impact || 1)) < 15).length;
+  const lowRisks = risks.filter(r => ((r.prob || 1) * (r.impact || 1)) < 5).length;
 
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(226, 232, 240);
@@ -1104,17 +1390,31 @@ export function exportRisksPDF(project: Project) {
   doc.setTextColor(30, 41, 59);
   doc.text(`Total Risques : ${risks.length}`, 18, currentY + 7);
   doc.setTextColor(220, 38, 38);
-  doc.text(`Critiques (Score >= 12) : ${highRisks}`, 60, currentY + 7);
+  doc.text(`Critiques (>= 15) : ${highRisks}`, 60, currentY + 7);
   doc.setTextColor(217, 119, 6);
-  doc.text(`Moyens (6 à 11) : ${medRisks}`, 115, currentY + 7);
+  doc.text(`Moyens / Élevés (5 à 14) : ${medRisks}`, 110, currentY + 7);
   doc.setTextColor(22, 163, 74);
-  doc.text(`Faibles (< 6) : ${lowRisks}`, 160, currentY + 7);
+  doc.text(`Faibles (< 5) : ${lowRisks}`, 165, currentY + 7);
 
-  currentY += 18;
+  currentY += 16;
+
+  // 5x5 Heatmap Image
+  const heatmapImg = generateRiskMatrixCanvasDataUrl(risks);
+  if (heatmapImg) {
+    doc.addImage(heatmapImg, 'PNG', 14, currentY, 182, 114);
+    currentY += 120;
+  }
+
+  // If table won't fit on current page, start clean on new page
+  if (currentY + 45 > doc.internal.pageSize.getHeight() - 20) {
+    doc.addPage();
+    addPdfHeader(doc, project, 'Registre & Matrice des Risques');
+    currentY = 36;
+  }
 
   const body = risks.map((r, i) => {
     const score = (r.prob || 1) * (r.impact || 1);
-    const critLabel = score >= 12 ? 'CRITIQUE' : score >= 6 ? 'MOYEN' : 'FAIBLE';
+    const critLabel = score >= 15 ? 'CRITIQUE' : score >= 10 ? 'ÉLEVÉ' : score >= 5 ? 'MOYEN' : 'FAIBLE';
     return [
       `R-${i + 1}`,
       sanitizePdfText(r.desc) || 'Sans description',
@@ -1709,27 +2009,25 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
   const decisions = (project.decisionMatrix || []).filter(d => (d.title && d.title.trim().length > 0) || (d.options && d.options.length > 0));
   if (decisions.length > 0) {
     drawSectionHeader(`${sectionCounter++}. Matrices de Decision & Arbitrages`);
-    const decisionRows = decisions.map((d, idx) => {
-      const chosenOpt = (d.options || []).find(o => o.id === d.selectedOptionId);
-      return [
-        `D-${idx + 1} : ${sanitizePdfText(d.title)}`,
-        d.date || '-',
-        d.status ? d.status.toUpperCase() : 'EN COURS',
-        chosenOpt ? `Option retenue : ${sanitizePdfText(chosenOpt.name)}` : (sanitizePdfText(d.description) || '-'),
-        d.selectedOptionId ? 'Valide' : 'A trancher'
-      ];
+    decisions.forEach((d, idx) => {
+      if (idx > 0 && currentY + 50 > doc.internal.pageSize.getHeight() - 20) {
+        doc.addPage();
+        currentY = 22;
+      }
+      doc.setFontSize(8.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 41, 59);
+      doc.text(`Décision ${idx + 1} : ${sanitizePdfText(d.title)} (${d.status ? d.status.toUpperCase() : 'EN COURS'})`, 14, currentY);
+      currentY += 4;
+      if (d.description) {
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139);
+        doc.text(sanitizePdfText(d.description), 14, currentY);
+        currentY += 4;
+      }
+      currentY = renderDecisionMatrixTable(doc, d, currentY);
     });
-
-    autoTable(doc, {
-      startY: currentY,
-      head: [['Decision / Objet', 'Date', 'Statut', 'Option Retenue / Detail', 'Validation']],
-      body: decisionRows,
-      headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
-      styles: { fontSize: 7.5, cellPadding: 2.5 },
-      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 }, 1: { cellWidth: 22 }, 2: { cellWidth: 24, halign: 'center' }, 3: { cellWidth: 62 }, 4: { cellWidth: 24, halign: 'center' } },
-      margin: { left: 14, right: 14 }
-    });
-    currentY = (doc as any).lastAutoTable.finalY + 6;
   }
 
   // ==========================================
@@ -1738,11 +2036,23 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
   const rawRisks = (project.risksRegister || project.risks || []).filter(r => (r.desc && r.desc.trim().length > 0) || r.prob || r.impact);
   if (rawRisks.length > 0) {
     drawSectionHeader(`${sectionCounter++}. Registre des Risques & Actions de Mitigation`, [185, 28, 28]);
+
+    // 5x5 Heatmap Graphic from Tool
+    const heatmapImg = generateRiskMatrixCanvasDataUrl(rawRisks);
+    if (heatmapImg) {
+      if (currentY + 115 > doc.internal.pageSize.getHeight() - 20) {
+        doc.addPage();
+        currentY = 22;
+      }
+      doc.addImage(heatmapImg, 'PNG', 14, currentY, 182, 114);
+      currentY += 118;
+    }
+
     const risksData = rawRisks.map(r => {
       const prob = r.prob || 1;
       const impact = r.impact || 1;
       const gravScore = prob * impact;
-      const gravLabel = gravScore >= 12 ? 'Critique' : gravScore >= 6 ? 'Modere' : 'Faible';
+      const gravLabel = gravScore >= 15 ? 'Critique' : gravScore >= 10 ? 'Élevé' : gravScore >= 5 ? 'Moyen' : 'Faible';
       return [
         sanitizePdfText(r.desc) || 'Risque non specifie',
         `P:${prob} / I:${impact}`,
@@ -1751,6 +2061,11 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
         r.owner ? sanitizePdfText(getMemberName(r.owner)) : 'Equipe'
       ];
     });
+
+    if (currentY + 35 > doc.internal.pageSize.getHeight() - 20) {
+      doc.addPage();
+      currentY = 22;
+    }
 
     autoTable(doc, {
       startY: currentY,
@@ -1830,60 +2145,93 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
   // ==========================================
   // 5. LA MATRICE RACI
   // ==========================================
-  const rawRaci = (project.raciAssignments || []).filter(r => (r.rowName && r.rowName.trim().length > 0) && Object.keys(r.assignments || {}).length > 0);
-  if (rawRaci.length > 0) {
-    drawSectionHeader(`${sectionCounter++}. Matrice des Responsabilites (RACI)`);
-    const stakeholderGroups = project.stakeholderGroups || [];
-    const groupCols = stakeholderGroups.length > 0
-      ? stakeholderGroups.slice(0, 5).map((g) => ({
-          id: `group-${g.id}`,
-          name: g.name,
-          stakeholders: g.stakeholders || []
-        }))
-      : [
-          { id: 'group-copil', name: 'COPIL', stakeholders: [] },
-          { id: 'group-equipe', name: 'Equipe Projet', stakeholders: [] },
-          { id: 'group-metier', name: 'Metier', stakeholders: [] }
-        ];
+  const stakeholderGroups = project.stakeholderGroups || [];
+  const groupCols = stakeholderGroups.length > 0
+    ? stakeholderGroups.slice(0, 5).map((g) => ({
+        id: `group-${g.id}`,
+        name: g.name,
+        stakeholders: g.stakeholders || []
+      }))
+    : [
+        { id: 'group-copil', name: 'COPIL', stakeholders: [] },
+        { id: 'group-equipe', name: 'Equipe Projet', stakeholders: [] },
+        { id: 'group-metier', name: 'Metier', stakeholders: [] }
+      ];
 
-    const headCols = ['Activite / Tache', ...groupCols.map((g) => sanitizePdfText(g.name))];
-    const bodyCols = rawRaci.map((r) => {
-      const assignments = groupCols.map((g) => {
-        if (!r.assignments) return '-';
-        const cleanId = g.id.replace(/^group-/, '');
-        const searchKeys = [g.id, cleanId, `group-${cleanId}`, g.name];
+  // Deduplicate and merge stored RACI assignments by normalized row name
+  const raciMap = new Map<string, { rowName: string; assignments: Record<string, string> }>();
 
-        for (const k of searchKeys) {
-          if (r.assignments[k]) return formatRaciCode(r.assignments[k]);
+  (project.raciAssignments || []).forEach((r) => {
+    if (!r || !r.rowName || !r.rowName.trim()) return;
+    const cleanName = r.rowName.replace(/^[◆■●★\s%Æ•\-\[\]]+/gu, '').trim();
+    const norm = normalizeRaciKey(cleanName);
+    if (!norm) return;
+
+    if (!raciMap.has(norm)) {
+      raciMap.set(norm, {
+        rowName: cleanName,
+        assignments: { ...(r.assignments || {}) }
+      });
+    } else {
+      const existing = raciMap.get(norm)!;
+      Object.entries(r.assignments || {}).forEach(([k, v]) => {
+        if (v && v !== '-') {
+          existing.assignments[k] = v;
         }
-        for (const [k, v] of Object.entries(r.assignments)) {
-          if (
-            k.toLowerCase() === g.name.toLowerCase() ||
-            k.toLowerCase() === g.id.toLowerCase() ||
-            k.toLowerCase() === cleanId.toLowerCase()
-          ) {
-            return formatRaciCode(v);
-          }
+      });
+      if (existing.rowName.includes(' : ') && !cleanName.includes(' : ')) {
+        existing.rowName = cleanName;
+      }
+    }
+  });
+
+  const headCols = ['Activite / Tache', ...groupCols.map((g) => sanitizePdfText(g.name))];
+  const bodyCols: string[][] = [];
+
+  raciMap.forEach((r) => {
+    const assignments = groupCols.map((g) => {
+      if (!r.assignments) return '-';
+      const cleanId = g.id.replace(/^group-/, '');
+      const searchKeys = [g.id, cleanId, `group-${cleanId}`, g.name];
+
+      for (const k of searchKeys) {
+        if (r.assignments[k]) return formatRaciCode(r.assignments[k]);
+      }
+      for (const [k, v] of Object.entries(r.assignments)) {
+        if (
+          k.toLowerCase() === g.name.toLowerCase() ||
+          k.toLowerCase() === g.id.toLowerCase() ||
+          k.toLowerCase() === cleanId.toLowerCase()
+        ) {
+          return formatRaciCode(v);
         }
-        if (g.stakeholders && g.stakeholders.length > 0) {
-          for (const sh of g.stakeholders) {
-            const shName = (sh.name || '').trim();
-            const shId = sh.id;
-            for (const [k, v] of Object.entries(r.assignments)) {
-              if (
-                (shId && k.toLowerCase() === shId.toLowerCase()) ||
-                (shName && k.toLowerCase() === shName.toLowerCase())
-              ) {
-                return formatRaciCode(v);
-              }
+      }
+      if (g.stakeholders && g.stakeholders.length > 0) {
+        for (const sh of g.stakeholders) {
+          const shName = (sh.name || '').trim();
+          const shId = sh.id;
+          for (const [k, v] of Object.entries(r.assignments)) {
+            if (
+              (shId && k.toLowerCase() === shId.toLowerCase()) ||
+              (shName && k.toLowerCase() === shName.toLowerCase())
+            ) {
+              return formatRaciCode(v);
             }
           }
         }
-        return '-';
-      });
-      return [sanitizePdfText(r.rowName), ...assignments];
+      }
+      return '-';
     });
 
+    // Only include rows that have AT LEAST ONE role assigned
+    const hasAssignments = assignments.some(a => a && a !== '-');
+    if (hasAssignments) {
+      bodyCols.push([sanitizePdfText(r.rowName), ...assignments]);
+    }
+  });
+
+  if (bodyCols.length > 0) {
+    drawSectionHeader(`${sectionCounter++}. Matrice des Responsabilites (RACI)`);
     autoTable(doc, {
       startY: currentY,
       head: [headCols],

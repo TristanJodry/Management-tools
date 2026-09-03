@@ -40,8 +40,11 @@ export const BudgetPieChartVisualizer: React.FC<BudgetPieChartVisualizerProps> =
   const groupSlices = useMemo(() => {
     return budgetGroups.map((g, idx) => {
       const expenses = g.expenses || [];
-      const totalPlanned = expenses.reduce((sum, e) => sum + (e.planned || 0), 0);
-      const totalSpent = expenses.reduce((sum, e) => sum + (e.spent || 0), 0);
+      const totalPlanned = expenses.reduce((sum, e) => {
+        const p = Number(e.planned) || ((Number(e.quantity) || 1) * (Number(e.unitPrice) || 0));
+        return sum + p;
+      }, 0);
+      const totalSpent = expenses.reduce((sum, e) => sum + (Number(e.spent) || 0), 0);
       const value = metricMode === 'spent' ? totalSpent : totalPlanned;
 
       return {
@@ -71,15 +74,17 @@ export const BudgetPieChartVisualizer: React.FC<BudgetPieChartVisualizerProps> =
     let colorIdx = 0;
     budgetGroups.forEach((g) => {
       (g.expenses || []).forEach((e) => {
-        const val = metricMode === 'spent' ? (e.spent || 0) : (e.planned || 0);
+        const spent = Number(e.spent) || 0;
+        const planned = Number(e.planned) || ((Number(e.quantity) || 1) * (Number(e.unitPrice) || 0));
+        const val = metricMode === 'spent' ? spent : planned;
         if (val > 0) {
           list.push({
             id: e.id,
             label: e.name || e.title || 'Dépense sans nom',
             groupName: g.title || g.name || 'Général',
             value: val,
-            planned: e.planned || 0,
-            spent: e.spent || 0,
+            planned,
+            spent,
             color: PALETTE[colorIdx % PALETTE.length]
           });
           colorIdx++;
@@ -121,11 +126,48 @@ export const BudgetPieChartVisualizer: React.FC<BudgetPieChartVisualizerProps> =
     const outerRadius = 85;
     const innerRadius = 45; // Donut hole
 
+    // Edge case: exactly 1 slice (100% of the pie) - SVG arc where start=end cannot render
+    if (slices.length === 1) {
+      const single = slices[0];
+      const isHovered = activeIndex === 0;
+      const ringRadius = (outerRadius + innerRadius) / 2;
+      const strokeW = outerRadius - innerRadius;
+
+      return (
+        <div className="relative flex items-center justify-center">
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="overflow-visible">
+            <circle
+              cx={center}
+              cy={center}
+              r={ringRadius}
+              stroke={single.color}
+              strokeWidth={isHovered ? strokeW + 4 : strokeW}
+              fill="none"
+              className="transition-all duration-200 cursor-pointer"
+              style={{
+                filter: isHovered ? 'drop-shadow(0 4px 6px rgba(0,0,0,0.25))' : 'none',
+                opacity: activeIndex === null || activeIndex === 0 ? 1 : 0.75
+              }}
+              onMouseEnter={() => onHover(0)}
+              onMouseLeave={() => onHover(null)}
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="text-[10px] font-bold uppercase text-slate-400">Total</span>
+            <span className="text-sm font-black text-slate-800 dark:text-slate-100 font-mono">
+              {formatEuro(totalValue)}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
     let currentAngle = -Math.PI / 2;
 
     const paths = slices.map((slice, index) => {
       const fraction = slice.value / totalValue;
-      const sliceAngle = fraction * 2 * Math.PI;
+      // Clamp angle slightly to prevent complete 360 loop collision
+      const sliceAngle = Math.min(fraction * 2 * Math.PI, 2 * Math.PI - 0.002);
       const endAngle = currentAngle + sliceAngle;
 
       const isHovered = activeIndex === index;
