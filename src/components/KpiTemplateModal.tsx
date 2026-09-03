@@ -22,7 +22,7 @@ import {
   KpiTemplate, 
   convertTemplateToKpi, 
   RECOMMENDED_KPI_TEMPLATES 
-} from '../data/kpiTemplates';
+} from '../config/kpiTemplates';
 
 interface KpiTemplateModalProps {
   isOpen: boolean;

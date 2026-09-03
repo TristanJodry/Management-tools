@@ -24,7 +24,7 @@ import {
   Info
 } from 'lucide-react';
 import { KpiTemplateModal } from './KpiTemplateModal';
-import { KpiTemplate, RECOMMENDED_KPI_TEMPLATES, convertTemplateToKpi } from '../data/kpiTemplates';
+import { KpiTemplate, RECOMMENDED_KPI_TEMPLATES, convertTemplateToKpi } from '../config/kpiTemplates';
 
 interface KpisTabProps {
   project: Project;
