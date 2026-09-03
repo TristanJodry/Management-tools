@@ -2,9 +2,11 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Project, TeamMember, DecisionItem, DecisionOption, RexItem, Kpi, BudgetGroup } from '../types';
 
-// Helper to format currency
+// Helper to format currency safely without unicode non-breaking space corruption
 const formatEuro = (val: number) => {
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(val || 0);
+  const num = Math.round(Number(val) || 0);
+  const formatted = num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return `${formatted} EUR`;
 };
 
 // Helper to sanitize text for standard PDF fonts (strip non-standard unicode characters that corrupt in jsPDF Helvetica)
@@ -12,18 +14,22 @@ export function sanitizePdfText(str: any): string {
   if (str === null || str === undefined) return '';
   if (typeof str !== 'string') return String(str);
   return str
+    .replace(/[\u00A0\u202F\u2007\u200B]/g, ' ') // Non-breaking spaces and zero-width spaces
     .replace(/[◆■●]/g, '')
-    .replace(/[★]/g, '*')
-    .replace(/[✓✔]/g, 'V')
+    .replace(/[★☆]/g, '*')
+    .replace(/[✓✔☑]/g, '[V]')
     .replace(/[➔➜→]/g, '->')
-    .replace(/[’‘]/g, "'")
-    .replace(/[“”]/g, '"')
+    .replace(/[←]/g, '<-')
+    .replace(/[’‘`´]/g, "'")
+    .replace(/[“”«»]/g, '"')
     .replace(/[–—]/g, '-')
     .replace(/[…]/g, '...')
-    .replace(/[•]/g, '-')
+    .replace(/[•·]/g, '-')
     .replace(/[≥]/g, '>=')
     .replace(/[≤]/g, '<=')
+    .replace(/[€]/g, 'EUR')
     .replace(/[%Æ]/g, '')
+    .replace(/[\uFFFD]/g, '')
     .trim();
 }
 
@@ -256,14 +262,14 @@ export function generateRiskMatrixCanvasDataUrl(risks: any[]): string | null {
     ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
     ctx.fillStyle = '#94a3b8';
     ctx.textAlign = 'center';
-    ctx.fillText('← IMPACT (GRAVITÉ)', 0, 0);
+    ctx.fillText('<- IMPACT (GRAVITE)', 0, 0);
     ctx.restore();
 
     // X-Axis label at bottom
     ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
     ctx.fillStyle = '#94a3b8';
     ctx.textAlign = 'center';
-    ctx.fillText('PROBABILITÉ (FRÉQUENCE) →', gridX + gridW / 2, height - 12);
+    ctx.fillText('PROBABILITE (FREQUENCE) ->', gridX + gridW / 2, height - 12);
 
     // Draw grid cells & Y-axis row labels
     impacts.forEach((imp, rowIdx) => {
@@ -431,7 +437,7 @@ export function renderDecisionMatrixTable(
     ...decisionOptions.map(opt => {
       const isChosen = opt.id === winningOptionId;
       return isChosen
-        ? `${sanitizePdfText(opt.name.toUpperCase())}\n[★ OPTION RETENUE]`
+        ? `${sanitizePdfText(opt.name.toUpperCase())}\n[* OPTION RETENUE]`
         : sanitizePdfText(opt.name.toUpperCase());
     })
   ];
@@ -452,7 +458,7 @@ export function renderDecisionMatrixTable(
     ...decisionOptions.map(opt => {
       const score = calculateTotalScore(opt);
       const isChosen = opt.id === winningOptionId;
-      return isChosen ? `${score} / 100\n[✓ RETENUE]` : `${score} / 100`;
+      return isChosen ? `${score} / 100\n[CHOIX RETENU]` : `${score} / 100`;
     })
   ];
   bodyRows.push(summaryRow);
@@ -531,13 +537,13 @@ function addPdfHeader(
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
-  doc.text(`Time'EATS • PROJET : ${sanitizePdfText(project.name.toUpperCase())}`, 14, 12);
+  doc.text(`Time'EATS - PROJET : ${sanitizePdfText(project.name.toUpperCase())}`, 14, 12);
 
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(224, 231, 255); // Indigo 100
   doc.text(
-    `Rapport Officiel • ${sanitizePdfText(tabTitle.toUpperCase())} • Chef de projet : ${sanitizePdfText(project.manager || 'Non assigné')} | Client : ${sanitizePdfText(project.clientName || 'N/A')}`,
+    `Rapport Officiel | ${sanitizePdfText(tabTitle.toUpperCase())} | Chef de projet : ${sanitizePdfText(project.manager || 'Non assigné')} | Client : ${sanitizePdfText(project.clientName || 'N/A')}`,
     14,
     20
   );
@@ -569,8 +575,8 @@ function addPdfFooter(doc: jsPDF, project: Project, tabTitle: string) {
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(148, 163, 184);
-    doc.text(`Plateforme de Gouvernance & Pilotage • ${sanitizePdfText(project.name)} • ${sanitizePdfText(tabTitle)}`, 14, pageHeight - 6);
-    doc.text(`Généré le ${today} • Page ${i} sur ${pageCount}`, pageWidth - 14, pageHeight - 6, { align: 'right' });
+    doc.text(`Plateforme de Gouvernance & Pilotage | ${sanitizePdfText(project.name)} | ${sanitizePdfText(tabTitle)}`, 14, pageHeight - 6);
+    doc.text(`Généré le ${today} | Page ${i} sur ${pageCount}`, pageWidth - 14, pageHeight - 6, { align: 'right' });
   }
 }
 
@@ -1521,7 +1527,7 @@ export function exportBudgetPDF(project: Project) {
 
   autoTable(doc, {
     startY: currentY,
-    head: [['Poste / Ligne de dépense', 'Montant Prévu (€)', 'Montant Réalisé (€)', 'Écart / Reste (€)', 'Consommation']],
+    head: [['Poste / Ligne de dépense', 'Montant Prévu (EUR)', 'Montant Réalisé (EUR)', 'Écart / Reste (EUR)', 'Consommation']],
     body: tableData,
     headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 8 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
@@ -1542,64 +1548,125 @@ export function exportBudgetPDF(project: Project) {
 
 // 7. Export Communication & Gouvernance PDF
 export function exportCommunicationPDF(project: Project) {
-  const doc = new jsPDF('p', 'mm', 'a4');
-  addPdfHeader(doc, project, 'Plan de Communication & Gouvernance');
+  const doc = new jsPDF('l', 'mm', 'a4'); // Landscape for rich matrix
+  addPdfHeader(doc, project, 'Stratégie de Communication & Gouvernance', 'l');
 
   let currentY = 36;
-  const comms = project.staffCommunications || [];
+  const matrix = project.enterpriseCommsMatrix || [];
   const meetings = project.governanceMeetings || project.meetings || [];
+  const stakeholders = (project.stakeholderGroups || []).flatMap(g => g.stakeholders || []);
+  const phases = project.ganttPhases || [];
+  const allMilestones = phases.flatMap(p => p.items.filter(i => i.type === 'milestone'));
 
-  doc.setFontSize(11);
+  // Section 1: Matrice de Communication d'Entreprise
+  doc.setFontSize(10.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(30, 41, 59);
-  doc.text('1. Plan de Communication & Diffusion', 14, currentY);
-  currentY += 6;
+  doc.text("1. Matrice de Communication avec l'Entreprise (Parties Prenantes & Groupes Cibles)", 14, currentY);
+  currentY += 5;
 
-  const commRows = comms.map((c) => [
-    c.title || 'Action de comm',
-    c.targetAudience || c.audience || 'Toutes parties prenantes',
-    c.date || '-',
-    c.status === 'sent' || c.status === 'done' ? 'Diffusé' : 'Planifié',
-    c.messageContent || '-'
+  const matrixRows = matrix.map((item) => [
+    sanitizePdfText(item.targetProfile || 'Partie prenante'),
+    sanitizePdfText(item.positioning || 'Indifférent'),
+    sanitizePdfText(item.influenceDegree || 'Moyen'),
+    item.isCommTarget ? 'Oui' : 'Non',
+    sanitizePdfText(`${item.channel || 'Point régulier'} (${item.frequency || 'Ponctuel'})`),
+    sanitizePdfText(`${item.deliverable || '-'} / ${item.responsible || 'Chef de Projet'}`),
+    sanitizePdfText(item.objectives || '-')
   ]);
 
   autoTable(doc, {
     startY: currentY,
-    head: [['Objet de Communication', 'Cible / Audience', 'Date Prévue', 'Statut', 'Contenu / Support']],
-    body: commRows.length > 0 ? commRows : [['Aucune action de communication enregistrée', '-', '-', '-', '-']],
-    headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+    head: [['Parties prenantes', 'Positionnement', "Degré d'influence", 'Groupe cible comm', 'Canal & Fréquence', 'Support & Émetteur', 'Objectifs & Messages clés']],
+    body: matrixRows.length > 0 ? matrixRows : [['Aucune partie prenante renseignée', '-', '-', '-', '-', '-', '-']],
+    headStyles: { fillColor: [84, 94, 40], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
-    styles: { fontSize: 7.5, cellPadding: 3 },
+    styles: { fontSize: 7, cellPadding: 2.5 },
+    columnStyles: {
+      0: { cellWidth: 50, fontStyle: 'bold' },
+      1: { cellWidth: 28, halign: 'center' },
+      2: { cellWidth: 28, halign: 'center' },
+      3: { cellWidth: 24, halign: 'center' },
+      4: { cellWidth: 42 },
+      5: { cellWidth: 42 },
+      6: { cellWidth: 55 }
+    },
     margin: { left: 14, right: 14 }
   });
 
-  currentY = (doc as any).lastAutoTable.finalY + 12;
+  currentY = (doc as any).lastAutoTable.finalY + 10;
 
-  if (currentY > 220) {
+  if (currentY > 140) {
     doc.addPage();
-    currentY = 35;
+    addPdfHeader(doc, project, 'Stratégie de Communication & Gouvernance', 'l');
+    currentY = 36;
   }
 
-  doc.setFontSize(11);
+  // Section 2: Réunions & Événements de Gouvernance
+  doc.setFontSize(10.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(30, 41, 59);
-  doc.text('2. Instances & Comités de Gouvernance', 14, currentY);
-  currentY += 6;
+  doc.text('2. Réunions & Événements de Gouvernance', 14, currentY);
+  currentY += 5;
 
-  const meetRows = meetings.map((m) => [
-    m.title || 'Comité',
-    m.objectives || 'Pilotage opérationnel / stratégique',
-    m.frequency || m.date || 'Régulier',
-    m.status === 'done' ? 'Tenu' : 'Programmé'
-  ]);
+  const meetRows = meetings.map((m) => {
+    // Attendees labels
+    const attendeesNames = (m.attendeeStakeholderIds || [])
+      .map(id => stakeholders.find(s => s.id === id)?.name || id)
+      .concat(m.attendeeNames || [])
+      .filter(Boolean);
+    const attendeesText = attendeesNames.length > 0 ? attendeesNames.join(', ') : 'Non spécifié';
+
+    // Milestones labels
+    const milestonesNames = (m.milestoneIds || [])
+      .map(id => allMilestones.find(ms => ms.id === id)?.name || id)
+      .filter(Boolean);
+    const milestonesText = milestonesNames.length > 0 ? milestonesNames.join(', ') : '-';
+
+    // Frequency / recurrence
+    const cadenceText = m.type === 'recurring'
+      ? `Récurrente (${m.frequency || 'Régulier'}${m.dayOfWeek ? ` - ${m.dayOfWeek}` : ''})`
+      : 'Ponctuelle';
+
+    // Date
+    const dateText = m.date ? m.date : '-';
+
+    // Summary & docs
+    const docsCount = (m.documents || []).length;
+    let summaryText = m.summary || m.objectives || '-';
+    if (docsCount > 0) {
+      summaryText += ` [${docsCount} doc(s)]`;
+    }
+
+    const statusLabel = m.status === 'done' ? 'Réalisée' : m.status === 'cancelled' ? 'Annulée' : 'Planifiée';
+
+    return [
+      sanitizePdfText(m.title || 'Réunion'),
+      cadenceText,
+      dateText,
+      sanitizePdfText(attendeesText),
+      sanitizePdfText(milestonesText),
+      sanitizePdfText(summaryText),
+      statusLabel
+    ];
+  });
 
   autoTable(doc, {
     startY: currentY,
-    head: [['Instance / Comité', 'Objectifs & Ordre du Jour', 'Périodicité / Date', 'Statut']],
-    body: meetRows.length > 0 ? meetRows : [['Aucun comité spécifique configuré', '-', '-', '-']],
-    headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+    head: [['Titre de la Réunion / Événement', 'Type / Cadence', 'Date', 'Participants Convoqués', 'Jalons Associés', 'Résumé / Documents', 'Statut']],
+    body: meetRows.length > 0 ? meetRows : [['Aucune réunion enregistrée', '-', '-', '-', '-', '-', '-']],
+    headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
-    styles: { fontSize: 8, cellPadding: 3 },
+    styles: { fontSize: 7, cellPadding: 2.5 },
+    columnStyles: {
+      0: { cellWidth: 42, fontStyle: 'bold' },
+      1: { cellWidth: 32 },
+      2: { cellWidth: 22 },
+      3: { cellWidth: 45 },
+      4: { cellWidth: 35 },
+      5: { cellWidth: 65 },
+      6: { cellWidth: 22, halign: 'center' }
+    },
     margin: { left: 14, right: 14 }
   });
 
@@ -2611,7 +2678,7 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
       doc.setFontSize(7);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(30, 41, 59);
-      doc.text(`Signataire : ${sanitizePdfText(closureData.signoffName)} (${sanitizePdfText(closureData.signoffRole || 'Commanditaire')})  •  Date : ${closureData.signoffDate || 'N/A'}`, 18, currentY + 5.5);
+      doc.text(`Signataire : ${sanitizePdfText(closureData.signoffName)} (${sanitizePdfText(closureData.signoffRole || 'Commanditaire')}) | Date : ${closureData.signoffDate || 'N/A'}`, 18, currentY + 5.5);
       currentY += 12;
     }
   }
@@ -2685,13 +2752,13 @@ export function exportPortfolioSupervisionPDF(
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text("Time'EATS • SUPERVISION DE PORTEFEUILLE PROJETS (SPP)", 14, 11);
+    doc.text("Time'EATS - SUPERVISION DE PORTEFEUILLE PROJETS (SPP)", 14, 11);
 
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(226, 232, 240);
     doc.text(
-      `Rapport de Pilotage & Contrôle Stratégique • ${sanitizePdfText(tabLabel)} • Périmètre : ${sanitizePdfText(filterTitle)}`,
+      `Rapport de Pilotage & Contrôle Stratégique | ${sanitizePdfText(tabLabel)} | Périmètre : ${sanitizePdfText(filterTitle)}`,
       14,
       19
     );
@@ -2725,9 +2792,9 @@ export function exportPortfolioSupervisionPDF(
       doc.setFontSize(7);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(100, 116, 139);
-      doc.text("Direction des Systèmes & Portefeuille Projets • Time'EATS SPP", 14, pageHeight - 7);
+      doc.text("Direction des Systèmes & Portefeuille Projets - Time'EATS SPP", 14, pageHeight - 7);
       doc.text(
-        `Document Confidentiel • Généré le ${today} • Page ${i} / ${pageCount}`,
+        `Document Confidentiel | Généré le ${today} | Page ${i} / ${pageCount}`,
         pageWidth - 14,
         pageHeight - 7,
         { align: 'right' }
@@ -2810,14 +2877,14 @@ export function exportPortfolioSupervisionPDF(
     {
       title: 'BUDGET CONSOLIDÉ',
       val: `${formatEuro(totalBudgetSpent)} / ${formatEuro(totalBudgetAllocated)}`,
-      sub: `Conso: ${budgetBurnRate}% • Solde: ${formatEuro(totalBudgetRemaining)}`,
+      sub: `Conso: ${budgetBurnRate}% | Solde: ${formatEuro(totalBudgetRemaining)}`,
       fill: [240, 253, 244],
       stroke: [187, 247, 208],
       textCol: [22, 101, 52]
     },
     {
       title: 'AVANCEMENT & QUALITÉ',
-      val: `Avancement: ${avgProgress}% • Qualité: ${avgQuality}%`,
+      val: `Avancement: ${avgProgress}% | Qualité: ${avgQuality}%`,
       sub: 'Moyenne pondérée des livrables',
       fill: [254, 243, 199],
       stroke: [253, 230, 138],

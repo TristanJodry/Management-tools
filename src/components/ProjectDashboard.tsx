@@ -85,6 +85,7 @@ import ClosureTab from './ClosureTab';
 import RexTab from './RexTab';
 import DocumentsTab from './DocumentsTab';
 import KpisTab from './KpisTab';
+import { CommunicationTab } from './CommunicationTab';
 import { GanttChartVisualizer } from './GanttChartVisualizer';
 import { RiskMatrixVisualizer } from './RiskMatrixVisualizer';
 import { BudgetPieChartVisualizer } from './BudgetPieChartVisualizer';
@@ -2535,41 +2536,15 @@ export default function ProjectDashboard({
 
           {/* TAB 7: COMMUNICATION */}
           {activeTab === 'communication' && (
-            <div className="space-y-6">
-              {/* Communication Sub-tabs */}
-              <div className="flex border-b border-slate-200 pb-2 gap-4 items-center justify-between">
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => setCommSubTab('meetings')}
-                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                      commSubTab === 'meetings'
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    Événements & Réunions de Gouvernance
-                  </button>
-                  <button
-                    onClick={() => setCommSubTab('actions')}
-                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                      commSubTab === 'actions'
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    Actions de Communication & Rapports
-                  </button>
-                </div>
+            <CommunicationTab
+              project={project}
+              updateProjectData={updateProjectData}
+              canEdit={canEditCurrentModule}
+            />
+          )}
 
-                <button
-                  type="button"
-                  onClick={() => exportCommunicationPDF(project)}
-                  className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                  title="Télécharger la communication en PDF"
-                >
-                  <Download className="w-3.5 h-3.5" /> Télécharger en PDF
-                </button>
-              </div>
+          {false && (
+            <div className="space-y-6">
 
               {commSubTab === 'meetings' ? (
                 <div className="space-y-6">

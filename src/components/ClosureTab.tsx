@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Project, ProjectClosureData } from '../types';
-import { FileSignature, CheckCircle2, Lock, Save, ShieldCheck, AlertCircle, Download } from 'lucide-react';
+import { FileSignature, CheckCircle2, Lock, Save, ShieldCheck, AlertCircle, Download, CheckSquare, Square, FolderTree } from 'lucide-react';
 import { exportClosurePDF } from '../utils/pdfExport';
 
 interface ClosureTabProps {
@@ -9,12 +9,25 @@ interface ClosureTabProps {
   canEdit?: boolean;
 }
 
+interface WbsMilestoneItem {
+  id: string;
+  name: string;
+  phaseId: string;
+  phaseName: string;
+  phaseCode: string;
+  wbsCode: string;
+  completed: boolean;
+  progress: number;
+  endDate?: string;
+}
+
 export default function ClosureTab({ project, onUpdateProject, canEdit = true }: ClosureTabProps) {
   const closureData: ProjectClosureData = project.closureData || {
     deliverablesValidated: false,
     acceptanceSigned: false,
     supportTransferred: false,
     accessRevoked: false,
+    validatedMilestoneIds: [],
     finalSummary: '',
     signoffName: '',
     signoffRole: '',
@@ -24,6 +37,109 @@ export default function ClosureTab({ project, onUpdateProject, canEdit = true }:
 
   const [formState, setFormState] = useState<ProjectClosureData>(closureData);
   const [savedMessage, setSavedMessage] = useState(false);
+
+  // Extract all milestones created in the WBS
+  const wbsMilestones = useMemo<WbsMilestoneItem[]>(() => {
+    const list: WbsMilestoneItem[] = [];
+    (project.ganttPhases || []).forEach((phase, phaseIdx) => {
+      const phaseCode = `${phaseIdx + 1}`;
+      let itemIdx = 0;
+      (phase.items || []).forEach((item) => {
+        itemIdx++;
+        if (item.type === 'milestone') {
+          list.push({
+            id: item.id,
+            name: item.name,
+            phaseId: phase.id,
+            phaseName: phase.name,
+            phaseCode,
+            wbsCode: `${phaseCode}.${itemIdx}`,
+            completed: !!item.completed,
+            progress: item.progress ?? (item.completed ? 100 : 0),
+            endDate: item.endDate
+          });
+        }
+      });
+    });
+    return list;
+  }, [project.ganttPhases]);
+
+  const validatedCount = wbsMilestones.filter((m) => m.completed).length;
+  const totalMilestones = wbsMilestones.length;
+  const milestonesProgressPercent = totalMilestones > 0 ? Math.round((validatedCount / totalMilestones) * 100) : 0;
+
+  // Toggle milestone completion directly in WBS and project closure state
+  const handleToggleMilestone = (milestoneId: string) => {
+    if (!canEdit) return;
+    const target = wbsMilestones.find((m) => m.id === milestoneId);
+    if (!target) return;
+    const nextCompleted = !target.completed;
+
+    const updatedPhases = (project.ganttPhases || []).map((phase) => ({
+      ...phase,
+      items: (phase.items || []).map((item) => {
+        if (item.id === milestoneId) {
+          return {
+            ...item,
+            completed: nextCompleted,
+            progress: nextCompleted ? 100 : 0
+          };
+        }
+        return item;
+      })
+    }));
+
+    const nextValidated = nextCompleted
+      ? Array.from(new Set([...(formState.validatedMilestoneIds || []), milestoneId]))
+      : (formState.validatedMilestoneIds || []).filter((id) => id !== milestoneId);
+
+    const allCompleted = totalMilestones > 0 && wbsMilestones.every((m) =>
+      m.id === milestoneId ? nextCompleted : m.completed
+    );
+
+    const nextState: ProjectClosureData = {
+      ...formState,
+      validatedMilestoneIds: nextValidated,
+      deliverablesValidated: allCompleted
+    };
+
+    setFormState(nextState);
+    onUpdateProject({
+      ganttPhases: updatedPhases,
+      closureData: nextState
+    });
+  };
+
+  const handleValidateAllMilestones = (markAll: boolean) => {
+    if (!canEdit || totalMilestones === 0) return;
+
+    const updatedPhases = (project.ganttPhases || []).map((phase) => ({
+      ...phase,
+      items: (phase.items || []).map((item) => {
+        if (item.type === 'milestone') {
+          return {
+            ...item,
+            completed: markAll,
+            progress: markAll ? 100 : 0
+          };
+        }
+        return item;
+      })
+    }));
+
+    const nextValidated = markAll ? wbsMilestones.map((m) => m.id) : [];
+    const nextState: ProjectClosureData = {
+      ...formState,
+      validatedMilestoneIds: nextValidated,
+      deliverablesValidated: markAll
+    };
+
+    setFormState(nextState);
+    onUpdateProject({
+      ganttPhases: updatedPhases,
+      closureData: nextState
+    });
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +171,7 @@ export default function ClosureTab({ project, onUpdateProject, canEdit = true }:
             Processus de Clôture Officielle du Projet
           </h3>
           <p className="text-xs text-slate-500">
-            Validez les critères de fin de projet, consignez le bilan final et officialisez le PV de recette.
+            Validez les jalons du WBS, consignez le bilan final et officialisez le PV de clôture.
           </p>
         </div>
 
@@ -82,76 +198,120 @@ export default function ClosureTab({ project, onUpdateProject, canEdit = true }:
 
       <form onSubmit={handleSave} className="space-y-6">
         
-        {/* Checklist section */}
+        {/* Checklist section: WBS Milestones */}
         <div className="bg-slate-50/80 p-5 rounded-xl border border-slate-200 space-y-4">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-            <ShieldCheck className="w-4 h-4 text-indigo-600" />
-            Vérification Préalable à la Clôture
-          </h4>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                Vérification Préalable à la Clôture (Jalons du WBS)
+              </h4>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Cochez la validation de chaque jalon clé créé dans le découpage WBS pour acter la complétion des livrables.
+              </p>
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            
-            <label className={`flex items-start gap-3 p-3.5 rounded-lg border transition-all cursor-pointer ${
-              formState.deliverablesValidated ? 'bg-emerald-50/50 border-emerald-200' : 'bg-white border-slate-200'
-            }`}>
-              <input
-                type="checkbox"
-                checked={formState.deliverablesValidated}
-                onChange={(e) => setFormState({ ...formState, deliverablesValidated: e.target.checked })}
-                className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-              />
-              <div>
-                <span className="text-xs font-bold text-slate-800 block">Livrables du Projet Validés</span>
-                <span className="text-[11px] text-slate-500">Tous les livrables contractuels ont été vérifiés et réceptionnés par le client.</span>
+            {totalMilestones > 0 && canEdit && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleValidateAllMilestones(true)}
+                  className="px-2.5 py-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md transition-colors cursor-pointer"
+                >
+                  Tout valider
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleValidateAllMilestones(false)}
+                  className="px-2.5 py-1 text-[11px] font-semibold text-slate-600 bg-white hover:bg-slate-100 border border-slate-200 rounded-md transition-colors cursor-pointer"
+                >
+                  Tout décocher
+                </button>
               </div>
-            </label>
-
-            <label className={`flex items-start gap-3 p-3.5 rounded-lg border transition-all cursor-pointer ${
-              formState.acceptanceSigned ? 'bg-emerald-50/50 border-emerald-200' : 'bg-white border-slate-200'
-            }`}>
-              <input
-                type="checkbox"
-                checked={formState.acceptanceSigned}
-                onChange={(e) => setFormState({ ...formState, acceptanceSigned: e.target.checked })}
-                className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-              />
-              <div>
-                <span className="text-xs font-bold text-slate-800 block">Procès-Verbal (PV) de Recette Signé</span>
-                <span className="text-[11px] text-slate-500">Signature formelle du PV de recette sans réserve majeure.</span>
-              </div>
-            </label>
-
-            <label className={`flex items-start gap-3 p-3.5 rounded-lg border transition-all cursor-pointer ${
-              formState.supportTransferred ? 'bg-emerald-50/50 border-emerald-200' : 'bg-white border-slate-200'
-            }`}>
-              <input
-                type="checkbox"
-                checked={formState.supportTransferred}
-                onChange={(e) => setFormState({ ...formState, supportTransferred: e.target.checked })}
-                className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-              />
-              <div>
-                <span className="text-xs font-bold text-slate-800 block">Transfert aux Équipes d'Exploitation / RUN</span>
-                <span className="text-[11px] text-slate-500">Passage de relais, documentation d'exploitation et formation délivrées.</span>
-              </div>
-            </label>
-
-            <label className={`flex items-start gap-3 p-3.5 rounded-lg border transition-all cursor-pointer ${
-              formState.accessRevoked ? 'bg-emerald-50/50 border-emerald-200' : 'bg-white border-slate-200'
-            }`}>
-              <input
-                type="checkbox"
-                checked={formState.accessRevoked}
-                onChange={(e) => setFormState({ ...formState, accessRevoked: e.target.checked })}
-                className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-              />
-              <div>
-                <span className="text-xs font-bold text-slate-800 block">Libération des Ressources & Droits</span>
-                <span className="text-[11px] text-slate-500">Fermeture des accès temporaires, restitution des comptes et équipements.</span>
-              </div>
-            </label>
-
+            )}
           </div>
+
+          {/* Progress bar of milestones */}
+          {totalMilestones > 0 && (
+            <div className="bg-white p-3.5 rounded-lg border border-slate-200 space-y-2">
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-bold text-slate-700">
+                  Progression des Jalons WBS : {validatedCount} sur {totalMilestones} validés
+                </span>
+                <span className="font-extrabold text-indigo-600">{milestonesProgressPercent}%</span>
+              </div>
+              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                <div
+                  className={`h-full transition-all duration-300 ${
+                    milestonesProgressPercent === 100
+                      ? 'bg-emerald-500'
+                      : 'bg-indigo-600'
+                  }`}
+                  style={{ width: `${milestonesProgressPercent}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* List of WBS Milestones checkboxes */}
+          {totalMilestones === 0 ? (
+            <div className="p-6 bg-white rounded-xl border border-dashed border-slate-300 text-center space-y-2">
+              <FolderTree className="w-8 h-8 text-slate-400 mx-auto" />
+              <h5 className="text-xs font-bold text-slate-700">Aucun jalon créé dans le WBS</h5>
+              <p className="text-[11px] text-slate-500 max-w-md mx-auto">
+                Les critères préalables à la clôture sont directement reliés aux jalons du WBS. Rendez-vous dans l’onglet <strong>WBS</strong> et ajoutez des éléments de type <strong>Jalon</strong> pour qu’ils apparaissent ici.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {wbsMilestones.map((m) => (
+                <div
+                  key={m.id}
+                  onClick={() => handleToggleMilestone(m.id)}
+                  className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
+                    m.completed
+                      ? 'bg-emerald-50/60 border-emerald-300 shadow-2xs'
+                      : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50'
+                  }`}
+                >
+                  <div className="mt-0.5 text-indigo-600 flex-shrink-0">
+                    {m.completed ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    ) : (
+                      <Square className="w-5 h-5 text-slate-300 hover:text-slate-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                        WBS {m.wbsCode}
+                      </span>
+                      {m.completed ? (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-200">
+                          Validé [OK]
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                          À valider
+                        </span>
+                      )}
+                    </div>
+                    <p className={`text-xs font-bold leading-tight ${
+                      m.completed ? 'text-slate-900 line-through/none text-emerald-950' : 'text-slate-800'
+                    }`}>
+                      {m.name}
+                    </p>
+                    <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500">
+                      <span>Phase : {m.phaseName}</span>
+                      {m.endDate && (
+                        <span>Échéance : {m.endDate}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Final Report & Signoff */}

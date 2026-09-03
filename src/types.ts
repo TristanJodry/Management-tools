@@ -82,14 +82,50 @@ export interface StaffCommunication {
   attachmentUrl?: string;
 }
 
+export interface MeetingDocument {
+  id: string;
+  name: string;
+  url?: string;
+  fileData?: string; // Base64 or object URL
+  fileType?: string;
+  fileSize?: string;
+  uploadedAt: string;
+  category?: 'agenda' | 'slides' | 'minutes' | 'other';
+}
+
 export interface GovernanceMeeting {
   id: string;
   title: string;
   objectives: string;
-  status: 'planned' | 'done' | 'delayed' | 'scheduled';
+  status: 'planned' | 'done' | 'delayed' | 'scheduled' | 'cancelled';
   type?: 'one_time' | 'recurring';
   date?: string;
-  frequency?: string; // e.g. 'Hebdomadaire', 'Bimensuel', 'Mensuel', '2x par semaine'
+  time?: string;
+  location?: string;
+  frequency?: string; // e.g. 'Hebdomadaire', 'Bimensuel', 'Mensuel', 'Quotidien'
+  dayOfWeek?: string; // e.g. 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'
+  attendeeStakeholderIds?: string[]; // IDs des parties prenantes sélectionnées
+  attendeeNames?: string[]; // Noms des participants
+  milestoneIds?: string[]; // IDs des jalons associés
+  summary?: string; // Résumé / Compte-rendu de réunion
+  decisionsTaken?: string; // Décisions ou actions arrêtées
+  documents?: MeetingDocument[]; // Documents et pièces jointes
+}
+
+export interface EnterpriseCommunicationMatrixItem {
+  id: string;
+  targetProfile: string; // Partie prenante / Profil / Service
+  positioning?: 'Allié' | 'Déchiré' | 'Indifférent' | 'Opposant' | string; // Positionnement (ex: Allié, Déchiré, Indifférent, Opposant)
+  influenceDegree?: 'Haut' | 'Moyen' | 'Faible' | string; // Degré d'influence (Haut, Moyen, Faible)
+  isCommTarget?: boolean; // Groupe cible de la communication (Oui / Non)
+  objectives?: string; // Objectif & Messages clés
+  channel?: string; // Canal / Vecteur de communication
+  frequency?: string; // Fréquence / Calendrier
+  responsible?: string; // Émetteur / Responsable
+  deliverable?: string; // Support / Livrable type
+  engagementLevel?: 'informer' | 'consulter' | 'impliquer' | 'valider'; // Niveau d'implication
+  status?: 'planned' | 'in_progress' | 'recurring' | 'done';
+  notes?: string;
 }
 
 export interface DecisionCriterion {
@@ -128,6 +164,7 @@ export interface ProjectClosureData {
   acceptanceSigned: boolean;
   supportTransferred: boolean;
   accessRevoked: boolean;
+  validatedMilestoneIds?: string[]; // IDs des jalons du WBS validés
   finalSummary: string;
   signoffName: string;
   signoffRole: string;
@@ -217,6 +254,7 @@ export interface Project {
   raciAssignments?: { rowName: string; assignments: Record<string, string> }[];
   meetings?: GovernanceMeeting[];
   governanceMeetings?: GovernanceMeeting[];
+  enterpriseCommsMatrix?: EnterpriseCommunicationMatrixItem[];
   meetingSchedule?: { frequency: string; dayOfWeek?: string; time?: string };
   risks?: { id: string; desc: string; prob: number; impact: number; mitigation: string; owner?: string }[];
   risksRegister?: { id: string; desc: string; prob: number; impact: number; mitigation: string; owner?: string }[];
