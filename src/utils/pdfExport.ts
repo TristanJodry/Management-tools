@@ -1177,10 +1177,10 @@ export function exportKpisPDF(project: Project) {
     const scoreBadge = scoreVal >= 80 ? 'CONFORME (Vert)' : scoreVal >= 50 ? 'VIGILANCE (Orange)' : 'ALERTE (Rouge)';
     return [
       `KPI-${idx + 1}`,
-      k.name || 'Indicateur',
+      sanitizePdfText(k.name || 'Indicateur') + (k.category ? `\n[${sanitizePdfText(k.category)}]` : ''),
       k.metricType || 'Nombre',
-      k.targetValue || '-',
-      k.currentValue || '-',
+      k.targetValue ? sanitizePdfText(`${k.targetValue} ${k.unit && k.unit !== 'ratio' && k.unit !== 'score' ? k.unit : ''}`.trim()) : '-',
+      k.currentValue ? sanitizePdfText(`${k.currentValue} ${k.unit && k.unit !== 'ratio' && k.unit !== 'score' ? k.unit : ''}`.trim()) : '-',
       `${scoreVal}%`,
       scoreBadge
     ];

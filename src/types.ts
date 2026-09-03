@@ -172,6 +172,9 @@ export interface Kpi {
   targetValue: string;
   status?: number; // percentage of compliance (0-100)
   statusScore?: 'ok' | 'warning' | 'alert';
+  category?: string;
+  description?: string;
+  unit?: string;
 }
 
 export interface Project {

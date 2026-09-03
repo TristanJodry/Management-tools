@@ -84,6 +84,7 @@ import WorkloadTab from './WorkloadTab';
 import ClosureTab from './ClosureTab';
 import RexTab from './RexTab';
 import DocumentsTab from './DocumentsTab';
+import KpisTab from './KpisTab';
 import { GanttChartVisualizer } from './GanttChartVisualizer';
 import { RiskMatrixVisualizer } from './RiskMatrixVisualizer';
 import KanbanBoard from './KanbanBoard';
@@ -178,7 +179,6 @@ export default function ProjectDashboard({
   });
   const [risks, setRisks] = useState(project.risksRegister || []);
   const [budgetGroups, setBudgetGroups] = useState<BudgetGroup[]>(project.budgetGroups || []);
-  const [kpiList, setKpiList] = useState<Kpi[]>(project.kpis || []);
   const [staffComms, setStaffComms] = useState<StaffCommunication[]>(project.staffCommunications || []);
   const [governanceMeetings, setGovernanceMeetings] = useState<GovernanceMeeting[]>(project.governanceMeetings || []);
 
@@ -188,7 +188,6 @@ export default function ProjectDashboard({
     setCustomRaciRows(project.customRaciRows || []);
     setRisks(project.risksRegister || []);
     setBudgetGroups(project.budgetGroups || []);
-    setKpiList(project.kpis || []);
     setStaffComms(project.staffCommunications || []);
     setGovernanceMeetings(project.governanceMeetings || []);
     if (project.raciAssignments) {
@@ -1070,53 +1069,8 @@ export default function ProjectDashboard({
   };
 
   // ==========================================
-  // 7. KPI LOGIC & EDITING
+  // 7. CALCULATIONS FOR DASHBOARD CARDS
   // ==========================================
-  const [kpiName, setKpiName] = useState('');
-  const [kpiType, setKpiType] = useState<'number' | 'percentage' | 'currency' | 'text'>('number');
-  const [kpiCurrent, setKpiCurrent] = useState('');
-  const [kpiTarget, setKpiTarget] = useState('');
-  const [kpiScore, setKpiScore] = useState<'ok' | 'warning' | 'alert'>('ok');
-
-  const [editingKpi, setEditingKpi] = useState<Kpi | null>(null);
-
-  const handleAddKpi = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!kpiName.trim()) return;
-
-    const newK: Kpi = {
-      id: `kpi-${Date.now()}`,
-      name: kpiName.trim(),
-      metricType: kpiType,
-      currentValue: kpiCurrent.trim() || '0',
-      targetValue: kpiTarget.trim() || '100',
-      statusScore: kpiScore
-    };
-
-    const updated = [...kpiList, newK];
-    setKpiList(updated);
-    updateProjectData({ kpis: updated });
-
-    setKpiName('');
-    setKpiCurrent('');
-    setKpiTarget('');
-  };
-
-  const handleUpdateKpi = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingKpi) return;
-    const updated = kpiList.map((k) => (k.id === editingKpi.id ? editingKpi : k));
-    setKpiList(updated);
-    updateProjectData({ kpis: updated });
-    setEditingKpi(null);
-  };
-
-  const handleDeleteKpi = (id: string) => {
-    const updated = kpiList.filter((k) => k.id !== id);
-    setKpiList(updated);
-    updateProjectData({ kpis: updated });
-  };
-
   // Calculations for KPI Cards
   const initialBudget = project.budget || 0;
   const dynamicPlanned = budgetGroups.reduce((sum, g) => sum + (g.expenses || []).reduce((s, e) => s + (e.planned || 0), 0), 0);
@@ -2848,81 +2802,12 @@ export default function ProjectDashboard({
 
           {/* TAB 8: KPI */}
           {activeTab === 'kpis' && (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-100 pb-3">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800">Indicateurs de Performance (KPI)</h3>
-                  <p className="text-xs text-slate-500">Configurez les métriques stratégiques et leurs valeurs cibles.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => exportKpisPDF(project)}
-                  className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs self-start sm:self-auto"
-                  title="Télécharger les KPI en PDF"
-                >
-                  <Download className="w-3.5 h-3.5" /> Télécharger en PDF
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {canEditCurrentModule && (
-                  <form onSubmit={handleAddKpi} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 self-start">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">Ajouter un KPI</h4>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Nom du KPI"
-                      value={kpiName}
-                      onChange={(e) => setKpiName(e.target.value)}
-                      className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        placeholder="Valeur actuelle"
-                        value={kpiCurrent}
-                        onChange={(e) => setKpiCurrent(e.target.value)}
-                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Valeur cible"
-                        value={kpiTarget}
-                        onChange={(e) => setKpiTarget(e.target.value)}
-                        className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white"
-                      />
-                    </div>
-                    <button type="submit" className="w-full py-2 bg-indigo-600 text-white font-bold text-xs rounded cursor-pointer">
-                      Consigner le KPI
-                    </button>
-                  </form>
-                )}
-
-                <div className={`${canEditCurrentModule ? 'lg:col-span-2' : 'lg:col-span-3'} grid grid-cols-1 sm:grid-cols-2 gap-4`}>
-                  {kpiList.map((k) => (
-                    <div key={k.id} className="bg-white p-4 rounded-xl border border-slate-200 space-y-2 shadow-xs">
-                      <div className="flex justify-between items-start">
-                        <h5 className="text-xs font-bold text-slate-900">{k.name}</h5>
-                        {canEditCurrentModule && (
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => setEditingKpi(k)} className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer">
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => handleDeleteKpi(k.id)} className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex justify-between items-baseline font-mono">
-                        <span className="text-xl font-bold text-indigo-700">{k.currentValue}</span>
-                        <span className="text-xs text-slate-400">Cible: {k.targetValue}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <KpisTab
+              project={project}
+              canEdit={canEditCurrentModule}
+              onUpdateProject={updateProjectData}
+              onExportPdf={() => exportKpisPDF(project)}
+            />
           )}
 
           {/* TAB 9: CLÔTURE */}
