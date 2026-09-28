@@ -1562,11 +1562,11 @@ export function exportCommunicationPDF(project: Project) {
   doc.setFontSize(10.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(30, 41, 59);
-  doc.text("1. Matrice de Communication avec l'Entreprise (Parties Prenantes & Groupes Cibles)", 14, currentY);
+  doc.text("1. Matrice de Communication avec l'Entreprise (Groupes de Parties Prenantes & Cibles)", 14, currentY);
   currentY += 5;
 
   const matrixRows = matrix.map((item) => [
-    sanitizePdfText(item.targetProfile || 'Partie prenante'),
+    sanitizePdfText(item.targetProfile || 'Groupe de parties prenantes'),
     sanitizePdfText(item.positioning || 'Indifférent'),
     sanitizePdfText(item.influenceDegree || 'Moyen'),
     item.isCommTarget ? 'Oui' : 'Non',
@@ -1577,8 +1577,8 @@ export function exportCommunicationPDF(project: Project) {
 
   autoTable(doc, {
     startY: currentY,
-    head: [['Parties prenantes', 'Positionnement', "Degré d'influence", 'Groupe cible comm', 'Canal & Fréquence', 'Support & Émetteur', 'Objectifs & Messages clés']],
-    body: matrixRows.length > 0 ? matrixRows : [['Aucune partie prenante renseignée', '-', '-', '-', '-', '-', '-']],
+    head: [['Groupes de parties prenantes', 'Positionnement', "Degré d'influence", 'Cible comm', 'Canal & Fréquence', 'Support & Émetteur', 'Objectifs & Messages clés']],
+    body: matrixRows.length > 0 ? matrixRows : [['Aucun groupe de parties prenantes renseigné', '-', '-', '-', '-', '-', '-']],
     headStyles: { fillColor: [84, 94, 40], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     styles: { fontSize: 7, cellPadding: 2.5 },
@@ -1737,77 +1737,244 @@ export function exportClosurePDF(project: Project) {
 
   let currentY = 36;
   const cData = project.closureData;
+  const contentWidth = doc.internal.pageSize.getWidth() - 28;
 
-  doc.setFontSize(11);
+  // Extract all WBS milestones
+  const wbsMilestones: {
+    id: string;
+    wbsCode: string;
+    name: string;
+    phaseName: string;
+    completed: boolean;
+    progress: number;
+    endDate?: string;
+  }[] = [];
+
+  (project.ganttPhases || []).forEach((phase, pIdx) => {
+    const phaseCode = `${pIdx + 1}`;
+    let itemIdx = 0;
+    (phase.items || []).forEach((item) => {
+      itemIdx++;
+      if (item.type === 'milestone') {
+        const isCompleted = !!item.completed || (cData?.validatedMilestoneIds || []).includes(item.id);
+        wbsMilestones.push({
+          id: item.id,
+          wbsCode: `${phaseCode}.${itemIdx}`,
+          name: item.name,
+          phaseName: phase.name,
+          completed: isCompleted,
+          progress: isCompleted ? 100 : (item.progress ?? 0),
+          endDate: item.endDate
+        });
+      }
+    });
+  });
+
+  const validatedCount = wbsMilestones.filter((m) => m.completed).length;
+  const totalMilestones = wbsMilestones.length;
+  const milestonesPercent = totalMilestones > 0 ? Math.round((validatedCount / totalMilestones) * 100) : 0;
+  const isClosed = !!cData?.isClosed;
+
+  // 1. Status Banner
+  if (isClosed) {
+    doc.setFillColor(220, 252, 231);
+    doc.roundedRect(14, currentY, contentWidth, 9, 1.5, 1.5, 'F');
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(22, 101, 52);
+    doc.text('STATUT : PROJET OFFICIELLEMENT CLÔTURÉ ET VALIDÉ', 18, currentY + 6);
+  } else {
+    doc.setFillColor(254, 243, 199);
+    doc.roundedRect(14, currentY, contentWidth, 9, 1.5, 1.5, 'F');
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(180, 83, 9);
+    doc.text(`STATUT : BILAN DE CLÔTURE EN COURS (${validatedCount}/${totalMilestones} JALONS WBS VALIDÉS)`, 18, currentY + 6);
+  }
+  currentY += 13;
+
+  // 2. Project Executive Overview at Closure
+  doc.setFontSize(10.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(30, 41, 59);
-  doc.text('1. Checklist de Clôture & Recette Finale', 14, currentY);
-  currentY += 6;
+  doc.text('1. Synthèse Générale & Repères du Projet', 14, currentY);
+  currentY += 5;
 
-  const checklistRows = [
-    ['Livrables Validés par le Client', cData?.deliverablesValidated ? '[X] OUI (Validé)' : '[ ] NON'],
-    ['Procès-Verbal de Recette Signé', cData?.acceptanceSigned ? '[X] OUI (Signé)' : '[ ] NON'],
-    ['Transfert aux Équipes Support / Run', cData?.supportTransferred ? '[X] OUI (Effectué)' : '[ ] NON'],
-    ['Révocation des Accès Temporaires', cData?.accessRevoked ? '[X] OUI (Effectué)' : '[ ] NON']
+  // Budget calculations from budgetGroups or project.spentBudget
+  const budgetGroups = project.budgetGroups || [];
+  const totalSpentFromGroups = budgetGroups.reduce(
+    (acc, g) => acc + (g.expenses || []).reduce((s, e) => s + (e.spent || 0), 0),
+    0
+  );
+  const totalPlannedFromGroups = budgetGroups.reduce(
+    (acc, g) => acc + (g.expenses || []).reduce((s, e) => s + (e.planned || 0), 0),
+    0
+  );
+  const initialBudget = project.budget || totalPlannedFromGroups || 0;
+  const totalSpent = project.spentBudget || totalSpentFromGroups || 0;
+  const variance = initialBudget - totalSpent;
+
+  // Derive dates if missing
+  let derivedStart = project.startDate;
+  let derivedEnd = project.endDate;
+  if (!derivedStart || !derivedEnd) {
+    (project.ganttPhases || []).forEach((p) => {
+      (p.items || []).forEach((it) => {
+        if (it.startDate && (!derivedStart || it.startDate < derivedStart)) derivedStart = it.startDate;
+        if (it.endDate && (!derivedEnd || it.endDate > derivedEnd)) derivedEnd = it.endDate;
+      });
+    });
+  }
+
+  const overviewRows = [
+    [
+      'Projet & Code',
+      `${sanitizePdfText(project.name)} (${(project as any).code || project.id || 'P-01'})`,
+      'Bénéficiaire / Client',
+      sanitizePdfText(project.clientName || 'Interne')
+    ],
+    [
+      'Chef de Projet',
+      sanitizePdfText(project.manager || 'Non assigné'),
+      'Période de Réalisation',
+      `${derivedStart || 'N/A'} au ${derivedEnd || 'N/A'}`
+    ],
+    [
+      'Budget Prévu / Consommé',
+      `${initialBudget.toLocaleString('fr-FR')} € / ${totalSpent.toLocaleString('fr-FR')} € (Écart : ${variance >= 0 ? '+' : ''}${variance.toLocaleString('fr-FR')} €)`,
+      'Jalons WBS Validés',
+      `${validatedCount} sur ${totalMilestones} (${milestonesPercent}%)`
+    ]
   ];
 
   autoTable(doc, {
     startY: currentY,
-    head: [['Critère d\'Acceptation & Passation', 'Statut de Validation']],
-    body: checklistRows,
-    headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+    body: overviewRows,
+    theme: 'grid',
+    styles: { fontSize: 7.5, cellPadding: 2.8 },
     columnStyles: {
-      0: { cellWidth: 120 },
-      1: { fontStyle: 'bold', halign: 'center' }
+      0: { fontStyle: 'bold', cellWidth: 42, fillColor: [241, 245, 249] },
+      1: { cellWidth: 50 },
+      2: { fontStyle: 'bold', cellWidth: 42, fillColor: [241, 245, 249] },
+      3: { cellWidth: 48 }
     },
-    styles: { fontSize: 8.5, cellPadding: 3.5 },
     margin: { left: 14, right: 14 }
   });
+  currentY = (doc as any).lastAutoTable.finalY + 10;
 
-  currentY = (doc as any).lastAutoTable.finalY + 12;
-
-  // Final summary
-  doc.setFontSize(11);
+  // 3. WBS Milestones Verification Section
+  doc.setFontSize(10.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(30, 41, 59);
-  doc.text('2. Synthèse & Bilan Récapitulatif', 14, currentY);
-  currentY += 6;
+  doc.text(`2. Vérification Préalable à la Clôture (Jalons du WBS - ${validatedCount}/${totalMilestones} validés)`, 14, currentY);
+  currentY += 5;
+
+  const milestoneRows = wbsMilestones.map((m) => [
+    m.wbsCode,
+    sanitizePdfText(m.name),
+    sanitizePdfText(m.phaseName),
+    m.endDate || '-',
+    `${m.progress}%`,
+    m.completed ? 'VALIDÉ [OK]' : 'À VALIDER'
+  ]);
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['Code', 'Jalon / Livrable Clé du WBS', 'Phase du WBS', 'Échéance', 'Avancement', 'Validation']],
+    body: milestoneRows.length > 0 ? milestoneRows : [['-', 'Aucun jalon de type "Jalon" configuré dans le WBS', '-', '-', '-', 'Non spécifié']],
+    headStyles: { fillColor: [51, 65, 85], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      0: { cellWidth: 16, fontStyle: 'bold', halign: 'center' },
+      1: { cellWidth: 70, fontStyle: 'bold' },
+      2: { cellWidth: 38 },
+      3: { cellWidth: 22, halign: 'center' },
+      4: { cellWidth: 20, halign: 'center' },
+      5: { cellWidth: 24, halign: 'center', fontStyle: 'bold' }
+    },
+    styles: { fontSize: 7.5, cellPadding: 2.6 },
+    margin: { left: 14, right: 14 }
+  });
+  currentY = (doc as any).lastAutoTable.finalY + 10;
+
+  // 4. Final summary
+  if (currentY > 230) {
+    doc.addPage();
+    addPdfHeader(doc, project, 'Bilan & Procès-Verbal de Clôture');
+    currentY = 36;
+  }
+
+  doc.setFontSize(10.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(30, 41, 59);
+  doc.text('3. Synthèse & Bilan Général de Clôture', 14, currentY);
+  currentY += 5;
 
   autoTable(doc, {
     startY: currentY,
     body: [
-      [{ content: cData?.finalSummary || 'Aucune synthèse rédigée pour le moment.', styles: { cellPadding: 5, fontStyle: 'normal' } }]
+      [{ content: sanitizePdfText(cData?.finalSummary || 'Aucune synthèse rédigée pour le moment dans l\'onglet Clôture.'), styles: { cellPadding: 5, fontStyle: 'normal' } }]
     ],
-    styles: { fontSize: 8.5, fillColor: [248, 250, 252] },
+    styles: { fontSize: 8, fillColor: [248, 250, 252] },
     margin: { left: 14, right: 14 }
   });
+  currentY = (doc as any).lastAutoTable.finalY + 10;
 
-  currentY = (doc as any).lastAutoTable.finalY + 12;
+  // 5. Formal signoff box & Signatures
+  if (currentY > 220) {
+    doc.addPage();
+    addPdfHeader(doc, project, 'Bilan & Procès-Verbal de Clôture');
+    currentY = 36;
+  }
 
-  // Formal signoff box
-  doc.setFontSize(11);
+  doc.setFontSize(10.5);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(30, 41, 59);
-  doc.text('3. Prononcé de Clôture & Signatures', 14, currentY);
-  currentY += 6;
+  doc.text('4. Prononcé Officiel de Clôture & Signatures', 14, currentY);
+  currentY += 5;
 
   const signoffRows = [
-    ['Signataire Officiel', cData?.signoffName || 'Non spécifié'],
-    ['Rôle / Fonction', cData?.signoffRole || 'Commanditaire / Direction'],
-    ['Date de Signature', cData?.signoffDate || new Date().toISOString().split('T')[0]],
-    ['Statut du Projet', cData?.isClosed ? 'PROJET OFFICIELLEMENT CLÔTURÉ' : 'EN COURS DE CLÔTURE']
+    ['Statut Officiel du Projet', isClosed ? 'PROJET OFFICIELLEMENT CLÔTURÉ ET VALIDÉ' : 'EN COURS DE CLÔTURE'],
+    ['Signataire Officiel', sanitizePdfText(cData?.signoffName || 'Non spécifié')],
+    ['Rôle / Fonction', sanitizePdfText(cData?.signoffRole || 'Commanditaire / Direction')],
+    ['Date de Signature Officielle', cData?.signoffDate || new Date().toISOString().split('T')[0]]
   ];
 
   autoTable(doc, {
     startY: currentY,
     body: signoffRows,
     columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 60, fillColor: [241, 245, 249] },
-      1: { cellWidth: 'auto' }
+      0: { fontStyle: 'bold', cellWidth: 55, fillColor: [241, 245, 249] },
+      1: { cellWidth: 'auto', fontStyle: 'bold' }
     },
-    styles: { fontSize: 8.5, cellPadding: 3 },
+    styles: { fontSize: 8, cellPadding: 2.8 },
     margin: { left: 14, right: 14 }
   });
+  currentY = (doc as any).lastAutoTable.finalY + 8;
+
+  // Signature approval blocks
+  const sigBoxWidth = (contentWidth - 6) / 2;
+  doc.setDrawColor(203, 213, 225);
+  doc.setFillColor(250, 250, 250);
+
+  // Chef de projet block
+  doc.roundedRect(14, currentY, sigBoxWidth, 26, 1.5, 1.5, 'FD');
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(51, 65, 85);
+  doc.text('Pour le Chef de Projet :', 18, currentY + 5);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Nom : ${sanitizePdfText(project.manager || 'Non assigné')}`, 18, currentY + 10);
+  doc.text('Date & Signature :', 18, currentY + 15);
+
+  // Sponsor / Client block
+  doc.roundedRect(14 + sigBoxWidth + 6, currentY, sigBoxWidth, 26, 1.5, 1.5, 'FD');
+  doc.setFont('helvetica', 'bold');
+  doc.text('Pour le Commanditaire / Sponsor :', 18 + sigBoxWidth + 6, currentY + 5);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Nom : ${sanitizePdfText(cData?.signoffName || project.clientName || 'Commanditaire')}`, 18 + sigBoxWidth + 6, currentY + 10);
+  doc.text(`Fonction : ${sanitizePdfText(cData?.signoffRole || 'Sponsor')}`, 18 + sigBoxWidth + 6, currentY + 15);
+  doc.text(`Date : ${cData?.signoffDate || '...'}`, 18 + sigBoxWidth + 6, currentY + 20);
 
   addPdfFooter(doc, project, 'Clôture de Projet');
   doc.save(`${project.id || 'projet'}_cloture.pdf`);
@@ -2624,42 +2791,81 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
   // 10. LA CLOTURE
   // ==========================================
   const closureData = project.closureData;
-  const hasClosure = Boolean(closureData && (closureData.isClosed || closureData.finalSummary || closureData.signoffName || closureData.deliverablesValidated || closureData.acceptanceSigned));
+  const hasClosure = Boolean(closureData && (closureData.isClosed || closureData.finalSummary || closureData.signoffName || (closureData.validatedMilestoneIds && closureData.validatedMilestoneIds.length > 0) || closureData.deliverablesValidated));
 
   if (hasClosure && closureData) {
     drawSectionHeader(`${sectionCounter++}. Bilan de Cloture du Projet`);
     
+    // Extract WBS milestones
+    const wbsMilestonesForComplete: {
+      wbsCode: string;
+      name: string;
+      phaseName: string;
+      completed: boolean;
+      progress: number;
+    }[] = [];
+
+    (project.ganttPhases || []).forEach((phase, pIdx) => {
+      const phaseCode = `${pIdx + 1}`;
+      let itemIdx = 0;
+      (phase.items || []).forEach((item) => {
+        itemIdx++;
+        if (item.type === 'milestone') {
+          const isCompleted = !!item.completed || (closureData.validatedMilestoneIds || []).includes(item.id);
+          wbsMilestonesForComplete.push({
+            wbsCode: `${phaseCode}.${itemIdx}`,
+            name: item.name,
+            phaseName: phase.name,
+            completed: isCompleted,
+            progress: isCompleted ? 100 : (item.progress ?? 0)
+          });
+        }
+      });
+    });
+
+    const validCount = wbsMilestonesForComplete.filter((m) => m.completed).length;
+    const totMilestones = wbsMilestonesForComplete.length;
+
     // Status banner
-    doc.setFillColor(closureData.isClosed ? 220 : 241, closureData.isClosed ? 252 : 245, closureData.isClosed ? 231 : 249);
+    doc.setFillColor(closureData.isClosed ? 220 : 254, closureData.isClosed ? 252 : 243, closureData.isClosed ? 231 : 199);
     doc.roundedRect(14, currentY, contentWidth, 8, 1.5, 1.5, 'F');
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(closureData.isClosed ? 22 : 71, closureData.isClosed ? 101 : 85, closureData.isClosed ? 52 : 105);
+    doc.setTextColor(closureData.isClosed ? 22 : 180, closureData.isClosed ? 101 : 83, closureData.isClosed ? 52 : 9);
     doc.text(
-      closureData.isClosed ? 'STATUT : PROJET OFFICIELLEMENT CLOTURE' : 'STATUT : BILAN DE CLOTURE EN COURS',
+      closureData.isClosed ? 'STATUT : PROJET OFFICIELLEMENT CLOTURE ET RECEPTIONNE' : `STATUT : BILAN DE CLOTURE EN COURS (${validCount}/${totMilestones} JALONS WBS VALIDES)`,
       18,
       currentY + 5.2
     );
     currentY += 11;
 
-    // Check items table
-    const checkRows = [
-      ['Livrables et exigences projet valides', closureData.deliverablesValidated ? 'Valide [OK]' : 'Non valide'],
-      ['Proces-Verbal (PV) de recette signe par le client/metier', closureData.acceptanceSigned ? 'Valide [OK]' : 'Non valide'],
-      ['Transfert de competences et passage au support/RUN effectue', closureData.supportTransferred ? 'Valide [OK]' : 'Non valide'],
-      ['Cloture administrative et revocation des acces temporaires', closureData.accessRevoked ? 'Valide [OK]' : 'Non valide']
-    ];
+    // Check items table: actual WBS milestones
+    if (wbsMilestonesForComplete.length > 0) {
+      const checkRows = wbsMilestonesForComplete.map((m) => [
+        m.wbsCode,
+        sanitizePdfText(m.name),
+        sanitizePdfText(m.phaseName),
+        `${m.progress}%`,
+        m.completed ? 'Valide [OK]' : 'A valider'
+      ]);
 
-    autoTable(doc, {
-      startY: currentY,
-      head: [['Jalon / Critere de Cloture Obligatoire', 'Etat de validation']],
-      body: checkRows,
-      headStyles: { fillColor: [51, 65, 85], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
-      styles: { fontSize: 7.5, cellPadding: 2.2 },
-      columnStyles: { 0: { cellWidth: 140 }, 1: { cellWidth: 42, halign: 'center', fontStyle: 'bold' } },
-      margin: { left: 14, right: 14 }
-    });
-    currentY = (doc as any).lastAutoTable.finalY + 5;
+      autoTable(doc, {
+        startY: currentY,
+        head: [['Code', 'Jalon Cle du WBS (Prealable Cloture)', 'Phase', 'Avancement', 'Etat']],
+        body: checkRows,
+        headStyles: { fillColor: [51, 65, 85], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+        styles: { fontSize: 7.5, cellPadding: 2.2 },
+        columnStyles: {
+          0: { cellWidth: 16, fontStyle: 'bold', halign: 'center' },
+          1: { cellWidth: 85 },
+          2: { cellWidth: 45 },
+          3: { cellWidth: 18, halign: 'center' },
+          4: { cellWidth: 26, halign: 'center', fontStyle: 'bold' }
+        },
+        margin: { left: 14, right: 14 }
+      });
+      currentY = (doc as any).lastAutoTable.finalY + 5;
+    }
 
     if (closureData.finalSummary && closureData.finalSummary.trim()) {
       checkPageBreak(15);

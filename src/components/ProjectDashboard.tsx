@@ -90,7 +90,13 @@ import { GanttChartVisualizer } from './GanttChartVisualizer';
 import { RiskMatrixVisualizer } from './RiskMatrixVisualizer';
 import { BudgetPieChartVisualizer } from './BudgetPieChartVisualizer';
 import KanbanBoard from './KanbanBoard';
-import ProjectAlertsBanner from './ProjectAlertsBanner';
+import ProjectAlertsBanner, { 
+  ProjectNotificationBell, 
+  ProjectNotificationsModal, 
+  computeProjectAlerts, 
+  getSeenAlertIds, 
+  saveSeenAlertIds 
+} from './ProjectAlertsBanner';
 
 interface ProjectDashboardProps {
   project: Project;
@@ -200,6 +206,36 @@ export default function ProjectDashboard({
       setRaciAssignments(init);
     }
   }, [project]);
+
+  // --- NOTIFICATION & ALERT MANAGEMENT ---
+  const [seenAlertIds, setSeenAlertIds] = useState<string[]>(() => getSeenAlertIds(project.id));
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+
+  useEffect(() => {
+    setSeenAlertIds(getSeenAlertIds(project.id));
+  }, [project.id]);
+
+  const allAlerts = useMemo(() => computeProjectAlerts(project), [project]);
+  const activeAlerts = useMemo(() => allAlerts.filter(a => !seenAlertIds.includes(a.id)), [allAlerts, seenAlertIds]);
+
+  const handleToggleAlertSeen = (alertId: string) => {
+    const updated = seenAlertIds.includes(alertId)
+      ? seenAlertIds.filter(id => id !== alertId)
+      : [...seenAlertIds, alertId];
+    setSeenAlertIds(updated);
+    saveSeenAlertIds(project.id, updated);
+  };
+
+  const handleMarkAllAlertsSeen = () => {
+    const allIds = allAlerts.map(a => a.id);
+    setSeenAlertIds(allIds);
+    saveSeenAlertIds(project.id, allIds);
+  };
+
+  const handleResetAllAlertsSeen = () => {
+    setSeenAlertIds([]);
+    saveSeenAlertIds(project.id, []);
+  };
 
   // Helper sync with parent
   const updateProjectData = (updates: Partial<Project>) => {
@@ -935,11 +971,28 @@ export default function ProjectDashboard({
     if (!editingExpense) return;
     const { groupId, expense } = editingExpense;
 
+    const qty = Math.max(1, Number(expense.quantity) || 1);
+    const uPrice = Math.max(0, Number(expense.unitPrice) || 0);
+    const plannedVal = expense.planned !== undefined ? Number(expense.planned) : (qty * uPrice);
+    const finalSpent = expense.spent !== undefined ? Number(expense.spent) : plannedVal;
+
+    const updatedExpense: BudgetExpense = {
+      ...expense,
+      title: (expense.title || expense.name || '').trim(),
+      name: (expense.title || expense.name || '').trim(),
+      quantity: qty,
+      unitPrice: uPrice,
+      unitPricePlanned: uPrice,
+      unitPriceSpent: uPrice,
+      planned: plannedVal,
+      spent: finalSpent
+    };
+
     const updated = budgetGroups.map((g) => {
       if (g.id === groupId) {
         return {
           ...g,
-          expenses: g.expenses.map((e) => (e.id === expense.id ? expense : e))
+          expenses: g.expenses.map((e) => (e.id === updatedExpense.id ? updatedExpense : e))
         };
       }
       return g;
@@ -1159,6 +1212,13 @@ export default function ProjectDashboard({
           </div>
 
           <div className="flex items-center gap-2 self-start md:self-center shrink-0">
+            {/* Notification Bell with live count and unread badge */}
+            <ProjectNotificationBell
+              project={project}
+              onClick={() => setIsNotificationModalOpen(true)}
+              unseenCount={activeAlerts.length}
+            />
+
             {/* Discreet Excel / CSV export icon button */}
             <button
               type="button"
@@ -1218,7 +1278,10 @@ export default function ProjectDashboard({
       {/* PROACTIVE ALERTS & VIGILANCE BANNER */}
       <ProjectAlertsBanner 
         project={project} 
-        onNavigateTab={(tabKey) => setActiveTab(tabKey)}
+        onNavigateTab={(tabKey) => setActiveTab(tabKey as any)}
+        seenAlertIds={seenAlertIds}
+        onToggleSeen={handleToggleAlertSeen}
+        onOpenNotifications={() => setIsNotificationModalOpen(true)}
       />
 
       {/* 2. CORE PERFORMANCE INDICATORS (Coûts & Avancement Planning) */}
@@ -2493,7 +2556,18 @@ export default function ProjectDashboard({
                                         {isPaid ? 'Payé ✓' : 'Prévue'}
                                       </button>
                                       <button
-                                        onClick={() => setEditingExpense({ groupId: group.id, expense: { ...exp, quantity: qty, unitPrice: uPrice, spent: spent, planned: planned } })}
+                                        onClick={() => setEditingExpense({ 
+                                          groupId: group.id, 
+                                          expense: { 
+                                            ...exp, 
+                                            title: exp.title || exp.name || '',
+                                            name: exp.name || exp.title || '',
+                                            quantity: qty, 
+                                            unitPrice: uPrice, 
+                                            spent: spent, 
+                                            planned: planned 
+                                          } 
+                                        })}
                                         className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer"
                                         title="Modifier"
                                       >
@@ -3097,16 +3171,24 @@ export default function ProjectDashboard({
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <form onSubmit={handleUpdateExpense} className="bg-white rounded-xl max-w-sm w-full p-6 space-y-4 shadow-xl">
             <h4 className="text-sm font-bold text-slate-900">Modifier la Ligne Budgétaire</h4>
-            <input
-              type="text"
-              required
-              value={editingExpense.expense.title}
-              onChange={(e) => setEditingExpense({
-                ...editingExpense,
-                expense: { ...editingExpense.expense, title: e.target.value }
-              })}
-              className="w-full text-xs px-3 py-2 border border-slate-300 rounded bg-white"
-            />
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Libellé de la dépense</label>
+              <input
+                type="text"
+                required
+                value={editingExpense.expense.title || editingExpense.expense.name || ''}
+                onChange={(e) => setEditingExpense({
+                  ...editingExpense,
+                  expense: { 
+                    ...editingExpense.expense, 
+                    title: e.target.value,
+                    name: e.target.value
+                  }
+                })}
+                placeholder="ex: Licences logicielles, Serveurs..."
+                className="w-full text-xs px-3 py-2 border border-slate-300 rounded bg-white"
+              />
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Qté (Unités)</label>
@@ -3115,15 +3197,20 @@ export default function ProjectDashboard({
                   min={1}
                   value={editingExpense.expense.quantity ?? 1}
                   onChange={(e) => {
-                    const q = Number(e.target.value) || 1;
-                    const u = editingExpense.expense.unitPrice ?? (editingExpense.expense.planned / (editingExpense.expense.quantity || 1));
+                    const q = Math.max(1, Number(e.target.value) || 1);
+                    const u = editingExpense.expense.unitPrice ?? 0;
+                    const newPlanned = q * u;
+                    const isPaid = (editingExpense.expense.spent || 0) > 0;
                     setEditingExpense({
                       ...editingExpense,
                       expense: {
                         ...editingExpense.expense,
                         quantity: q,
                         unitPrice: u,
-                        planned: q * u
+                        unitPricePlanned: u,
+                        unitPriceSpent: u,
+                        planned: newPlanned,
+                        spent: isPaid ? newPlanned : 0
                       }
                     });
                   }}
@@ -3136,16 +3223,22 @@ export default function ProjectDashboard({
                   type="number"
                   min={0}
                   step="any"
-                  value={editingExpense.expense.unitPrice ?? (editingExpense.expense.planned / (editingExpense.expense.quantity || 1))}
+                  value={editingExpense.expense.unitPrice ?? 0}
                   onChange={(e) => {
-                    const u = Number(e.target.value) || 0;
+                    const u = Math.max(0, Number(e.target.value) || 0);
                     const q = editingExpense.expense.quantity || 1;
+                    const newPlanned = q * u;
+                    const isPaid = (editingExpense.expense.spent || 0) > 0;
                     setEditingExpense({
                       ...editingExpense,
                       expense: {
                         ...editingExpense.expense,
+                        quantity: q,
                         unitPrice: u,
-                        planned: q * u
+                        unitPricePlanned: u,
+                        unitPriceSpent: u,
+                        planned: newPlanned,
+                        spent: isPaid ? newPlanned : 0
                       }
                     });
                   }}
@@ -3154,75 +3247,118 @@ export default function ProjectDashboard({
               </div>
             </div>
 
-            <div className="p-2.5 bg-indigo-50 border border-indigo-100 rounded-lg flex items-center justify-between text-xs">
-              <span className="text-[11px] font-semibold text-indigo-900">Montant Total :</span>
-              <span className="font-mono font-bold text-indigo-700 text-sm">
-                {formatEuro(editingExpense.expense.planned)}
-              </span>
-            </div>
-
-            <div className="space-y-1.5 pt-1">
-              <div className="flex justify-between items-center">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase">Statut de la dépense</label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingExpense({
-                        ...editingExpense,
-                        expense: { ...editingExpense.expense, spent: editingExpense.expense.planned }
-                      });
-                    }}
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded transition-colors ${
-                      (editingExpense.expense.spent || 0) > 0
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    Payé ✓
-                  </button>
-                  <span className="text-slate-300">•</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingExpense({
-                        ...editingExpense,
-                        expense: { ...editingExpense.expense, spent: 0 }
-                      });
-                    }}
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded transition-colors ${
-                      (editingExpense.expense.spent || 0) === 0
-                        ? 'bg-amber-100 text-amber-800'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    Prévue (0 €)
-                  </button>
-                </div>
-              </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Montant Total (€)</label>
               <input
                 type="number"
                 min={0}
                 step="any"
-                value={editingExpense.expense.spent ?? 0}
+                value={editingExpense.expense.planned ?? 0}
                 onChange={(e) => {
-                  const s = Number(e.target.value) || 0;
+                  const newPlanned = Math.max(0, Number(e.target.value) || 0);
+                  const q = editingExpense.expense.quantity || 1;
+                  const u = q > 0 ? (newPlanned / q) : newPlanned;
+                  const isPaid = (editingExpense.expense.spent || 0) > 0;
                   setEditingExpense({
                     ...editingExpense,
                     expense: {
                       ...editingExpense.expense,
-                      spent: s
+                      unitPrice: u,
+                      unitPricePlanned: u,
+                      unitPriceSpent: u,
+                      planned: newPlanned,
+                      spent: isPaid ? newPlanned : 0
                     }
                   });
                 }}
-                className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono font-bold text-emerald-700"
+                className="w-full text-xs px-2.5 py-1.5 border border-indigo-200 bg-indigo-50/40 rounded font-mono font-bold text-indigo-700"
               />
             </div>
+
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase">Statut de la dépense</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingExpense({
+                      ...editingExpense,
+                      expense: {
+                        ...editingExpense.expense,
+                        spent: editingExpense.expense.planned
+                      }
+                    });
+                  }}
+                  className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
+                    (editingExpense.expense.spent || 0) > 0
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300 ring-2 ring-emerald-500/20 shadow-2xs'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  Payé (Consommé)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingExpense({
+                      ...editingExpense,
+                      expense: {
+                        ...editingExpense.expense,
+                        spent: 0
+                      }
+                    });
+                  }}
+                  className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
+                    (editingExpense.expense.spent || 0) === 0
+                      ? 'bg-amber-50 text-amber-800 border-amber-300 ring-2 ring-amber-500/20 shadow-2xs'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5 text-amber-600" />
+                  Prévue (0 €)
+                </button>
+              </div>
+
+              <div className="text-[11px] px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between">
+                <span className="text-slate-600">Montant imputé au consommé :</span>
+                <span className={`font-mono font-bold ${(editingExpense.expense.spent || 0) > 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  {formatEuro(editingExpense.expense.spent || 0)}
+                </span>
+              </div>
+            </div>
+
+            <details className="text-xs group">
+              <summary className="text-[11px] text-slate-400 hover:text-slate-600 cursor-pointer select-none">
+                Ajuster manuellement le montant consommé (paiement partiel)...
+              </summary>
+              <div className="pt-2">
+                <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Montant consommé personnalisé (€)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={editingExpense.expense.spent ?? 0}
+                  onChange={(e) => {
+                    const s = Number(e.target.value) || 0;
+                    setEditingExpense({
+                      ...editingExpense,
+                      expense: {
+                        ...editingExpense.expense,
+                        spent: s
+                      }
+                    });
+                  }}
+                  className="w-full text-xs px-2.5 py-1.5 border border-slate-300 rounded bg-white font-mono font-bold text-emerald-700"
+                />
+              </div>
+            </details>
+
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setEditingExpense(null)} className="px-3 py-1.5 text-xs font-bold text-slate-600">
+              <button type="button" onClick={() => setEditingExpense(null)} className="px-3 py-1.5 text-xs font-bold text-slate-600 cursor-pointer">
                 Annuler
               </button>
-              <button type="submit" className="px-4 py-1.5 bg-indigo-600 text-white font-bold text-xs rounded">
+              <button type="submit" className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded transition-colors cursor-pointer shadow-2xs">
                 Mettre à jour
               </button>
             </div>
@@ -3264,6 +3400,19 @@ export default function ProjectDashboard({
           </div>
         </div>
       )}
+
+      {/* NOTIFICATIONS & ALERTS MODAL */}
+      <ProjectNotificationsModal
+        isOpen={isNotificationModalOpen}
+        onClose={() => setIsNotificationModalOpen(false)}
+        project={project}
+        alerts={allAlerts}
+        seenAlertIds={seenAlertIds}
+        onToggleSeen={handleToggleAlertSeen}
+        onMarkAllSeen={handleMarkAllAlertsSeen}
+        onResetAllSeen={handleResetAllAlertsSeen}
+        onNavigateTab={(tabKey) => setActiveTab(tabKey as any)}
+      />
 
     </div>
   );

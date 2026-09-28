@@ -22,7 +22,7 @@ import {
   Layers,
   Lock
 } from 'lucide-react';
-import { computeProjectAlerts } from './ProjectAlertsBanner';
+import { computeProjectAlerts, getSeenAlertIds } from './ProjectAlertsBanner';
 import SupervisionPortfolio from './SupervisionPortfolio';
 
 interface ProjectTableProps {
@@ -267,12 +267,14 @@ export default function ProjectTable({
                           </button>
                           {(() => {
                             const alerts = computeProjectAlerts(project);
-                            const crit = alerts.filter(a => a.type === 'danger').length;
-                            const warn = alerts.filter(a => a.type === 'warning').length;
+                            const seen = getSeenAlertIds(project.id);
+                            const active = alerts.filter(a => !seen.includes(a.id));
+                            const crit = active.filter(a => a.type === 'danger').length;
+                            const warn = active.filter(a => a.type === 'warning').length;
                             if (crit > 0) {
                               return (
                                 <span 
-                                  title={`${crit} alerte(s) critique(s)`}
+                                  title={`${crit} alerte(s) critique(s) active(s)`}
                                   className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 rounded-md"
                                 >
                                   <AlertOctagon className="w-3 h-3 text-rose-600" />
@@ -283,7 +285,7 @@ export default function ProjectTable({
                             if (warn > 0) {
                               return (
                                 <span 
-                                  title={`${warn} avertissement(s)`}
+                                  title={`${warn} avertissement(s) actif(s)`}
                                   className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-md"
                                 >
                                   <AlertTriangle className="w-3 h-3 text-amber-600" />

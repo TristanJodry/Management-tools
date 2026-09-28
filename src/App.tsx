@@ -40,8 +40,16 @@ import {
   Key,
   LogIn,
   ChevronDown,
-  QrCode
+  QrCode,
+  Bell,
+  BellRing
 } from 'lucide-react';
+import { 
+  computeProjectAlerts, 
+  getSeenAlertIds, 
+  saveSeenAlertIds, 
+  ProjectNotificationsModal 
+} from './components/ProjectAlertsBanner';
 
 export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -137,6 +145,10 @@ export default function App() {
   
   // Custom confirmation modal
   const [projectToDeleteId, setProjectToDeleteId] = useState<string | null>(null);
+
+  // Global Alerts / Notifications State
+  const [isGlobalAlertsModalOpen, setIsGlobalAlertsModalOpen] = useState(false);
+  const [appAlertsRefreshKey, setAppAlertsRefreshKey] = useState(0);
 
   // 1. Initial State Load from Server API (with LocalStorage fallback)
   useEffect(() => {
@@ -335,6 +347,20 @@ export default function App() {
   // Selected project for detailed view
   const selectedProject = projects.find(p => p.id === selectedProjectId);
 
+  // Active unseen alerts calculation for the top header
+  const totalUnseenAlertsCount = React.useMemo(() => {
+    if (selectedProject) {
+      const alerts = computeProjectAlerts(selectedProject);
+      const seen = getSeenAlertIds(selectedProject.id);
+      return alerts.filter(a => !seen.includes(a.id)).length;
+    }
+    return projects.reduce((acc, p) => {
+      const alerts = computeProjectAlerts(p);
+      const seen = getSeenAlertIds(p.id);
+      return acc + alerts.filter(a => !seen.includes(a.id)).length;
+    }, 0);
+  }, [projects, selectedProject, appAlertsRefreshKey]);
+
   const handleAddRexItem = (projectId: string, rexItem: RexItem) => {
     const updated = projects.map(p => {
       if (p.id === projectId) {
@@ -487,6 +513,35 @@ export default function App() {
                   </p>
                 </div>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition-colors ml-0.5" />
+              </button>
+            )}
+
+            {/* Global Alerts / Notification Bell */}
+            {projects.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsGlobalAlertsModalOpen(true)}
+                className={`p-2 rounded-xl border transition-all cursor-pointer relative ${
+                  totalUnseenAlertsCount > 0
+                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30 shadow-2xs'
+                    : 'text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700/80 border-slate-700/80'
+                }`}
+                title={
+                  totalUnseenAlertsCount > 0 
+                    ? `${totalUnseenAlertsCount} alerte(s) active(s) non vue(s) - Cliquer pour ouvrir` 
+                    : 'Toutes les alertes sont traitées / vues'
+                }
+              >
+                {totalUnseenAlertsCount > 0 ? (
+                  <BellRing className="w-4 h-4 text-rose-400 animate-pulse" />
+                ) : (
+                  <Bell className="w-4 h-4 text-slate-400" />
+                )}
+                {totalUnseenAlertsCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white font-black text-[9px] min-w-[18px] h-4.5 px-1 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-xs font-mono">
+                    {totalUnseenAlertsCount}
+                  </span>
+                )}
               </button>
             )}
 
@@ -696,6 +751,166 @@ export default function App() {
           onOpenUserMgmt={() => setIsUserMgmtModalOpen(true)}
           onUpdateUserPassword={handleUpdateUserPassword}
         />
+      )}
+
+      {/* GLOBAL ALERTS & NOTIFICATIONS MODAL (When selected project or global) */}
+      {isGlobalAlertsModalOpen && selectedProject && (
+        <ProjectNotificationsModal
+          isOpen={isGlobalAlertsModalOpen}
+          onClose={() => setIsGlobalAlertsModalOpen(false)}
+          project={selectedProject}
+          alerts={computeProjectAlerts(selectedProject)}
+          seenAlertIds={getSeenAlertIds(selectedProject.id)}
+          onToggleSeen={(alertId) => {
+            const current = getSeenAlertIds(selectedProject.id);
+            const updated = current.includes(alertId) ? current.filter(id => id !== alertId) : [...current, alertId];
+            saveSeenAlertIds(selectedProject.id, updated);
+            setAppAlertsRefreshKey(k => k + 1);
+          }}
+          onMarkAllSeen={() => {
+            const allIds = computeProjectAlerts(selectedProject).map(a => a.id);
+            saveSeenAlertIds(selectedProject.id, allIds);
+            setAppAlertsRefreshKey(k => k + 1);
+          }}
+          onResetAllSeen={() => {
+            saveSeenAlertIds(selectedProject.id, []);
+            setAppAlertsRefreshKey(k => k + 1);
+          }}
+        />
+      )}
+
+      {/* PORTFOLIO-WIDE ALERTS MODAL (When viewing projects list) */}
+      {isGlobalAlertsModalOpen && !selectedProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div 
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[85vh] border border-slate-200 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-slate-50/70 dark:bg-slate-850">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base font-display">
+                    Centre de Vigilance Portefeuille
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Alertes consolidées sur l'ensemble des projets
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsGlobalAlertsModalOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-3 flex-1 text-xs">
+              {(() => {
+                const allPortfolioAlerts = projects.flatMap(p => {
+                  const pAlerts = computeProjectAlerts(p);
+                  const seen = getSeenAlertIds(p.id);
+                  return pAlerts.map(a => ({ ...a, project: p, isSeen: seen.includes(a.id) }));
+                });
+
+                if (allPortfolioAlerts.length === 0) {
+                  return (
+                    <div className="py-12 text-center space-y-2">
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                        Aucune anomalie sur vos projets
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Tous les indicateurs budgétaires, jalons et risques sont au vert.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return allPortfolioAlerts.map((item, idx) => {
+                  return (
+                    <div
+                      key={`${item.project.id}-${item.id}`}
+                      className={`p-3.5 rounded-xl border flex flex-col sm:flex-row items-start justify-between gap-3 shadow-2xs transition-all ${
+                        item.isSeen 
+                          ? 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-850/60 opacity-60' 
+                          : item.type === 'danger'
+                          ? 'border-rose-200 dark:border-rose-800/80 bg-rose-50/40 dark:bg-rose-950/20'
+                          : 'border-amber-200 dark:border-amber-800/80 bg-amber-50/40 dark:bg-amber-950/20'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <span className={`w-7 h-7 rounded-lg ${item.type === 'danger' ? 'bg-rose-600' : 'bg-amber-500'} text-white font-black text-xs flex items-center justify-center shrink-0 shadow-2xs font-mono`}>
+                          #{idx + 1}
+                        </span>
+                        <div className="space-y-1 min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-[10px] uppercase px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                              {item.project.name}
+                            </span>
+                            {item.isSeen && (
+                              <span className="text-[10px] font-bold text-slate-400 bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded">
+                                ✓ Vu / Masqué
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs">
+                            {item.title}
+                          </h4>
+                          <p className="text-slate-600 dark:text-slate-400 text-[11px]">
+                            {item.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const cur = getSeenAlertIds(item.project.id);
+                            const updated = cur.includes(item.id) ? cur.filter(id => id !== item.id) : [...cur, item.id];
+                            saveSeenAlertIds(item.project.id, updated);
+                            setAppAlertsRefreshKey(k => k + 1);
+                          }}
+                          className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-200 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer"
+                        >
+                          {item.isSeen ? 'Réafficher' : 'Cacher (Vu)'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedProjectId(item.project.id);
+                            setIsGlobalAlertsModalOpen(false);
+                          }}
+                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-[11px] cursor-pointer"
+                        >
+                          Accéder au projet →
+                        </button>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-850 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsGlobalAlertsModalOpen(false)}
+                className="px-4 py-1.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold rounded-lg text-xs cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
