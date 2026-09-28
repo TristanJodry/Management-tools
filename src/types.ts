@@ -32,6 +32,13 @@ export interface StakeholderGroup {
   stakeholders: Stakeholder[];
 }
 
+export interface GanttSubTask {
+  id: string;
+  name: string;
+  completed?: boolean;
+  subtasks?: { id: string; name: string; completed?: boolean }[];
+}
+
 export interface GanttItem {
   id: string;
   type: 'task' | 'milestone'; // tâche ou jalon/livrable
@@ -43,6 +50,7 @@ export interface GanttItem {
   completed: boolean;
   predecessorId?: string; // ID of preceding task/milestone
   estimatedDays?: number;
+  subtasks?: GanttSubTask[];
 }
 
 export interface GanttPhase {

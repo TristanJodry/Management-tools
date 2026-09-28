@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { Project, GanttPhase, GanttItem, TeamMember } from '../types';
 import { exportWbsPDF } from '../utils/pdfExport';
+import WbsDiagramVisualizer from './WbsDiagramVisualizer';
 import {
   Layers,
   Plus,
@@ -41,6 +42,9 @@ export default function WbsTab({
   globalTeam = []
 }: WbsTabProps) {
   const ganttPhases = project.ganttPhases || [];
+
+  // View mode: automatic hierarchical diagram vs detailed list
+  const [viewMode, setViewMode] = useState<'diagram' | 'list'>('diagram');
 
   // Local states for adding / editing
   const [newPhaseName, setNewPhaseName] = useState('');
@@ -269,16 +273,69 @@ export default function WbsTab({
         </div>
       </div>
 
-      {/* Info notice about flow: WBS -> RACI -> Gantt */}
-      <div className="p-3.5 bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-800/60 rounded-xl flex items-start gap-2.5 text-xs text-indigo-900 dark:text-indigo-200">
-        <Info className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
-        <div className="space-y-0.5">
-          <span className="font-bold">Découpage structurant WBS :</span>
-          <p className="text-[11px] text-indigo-800 dark:text-indigo-300 leading-relaxed">
-            Listez ici l'ensemble des <strong>Phases</strong>, <strong>Tâches</strong> et <strong>Jalons</strong> du projet. Ils sont directement synchronisés avec la <strong>Matrice RACI</strong> (responsabilités par groupe de parties prenantes) et la <strong>Planification Gantt</strong> (où vous définirez les dates et assignations).
-          </p>
+      {/* View Switcher: Diagramme Visuel vs Liste Détaillée */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="inline-flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
+          <button
+            type="button"
+            onClick={() => setViewMode('diagram')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              viewMode === 'diagram'
+                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <FolderTree className="w-3.5 h-3.5" />
+            <span>Organigramme Graphique (Automatique)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              viewMode === 'list'
+                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+            }`}
+          >
+            <ListTodo className="w-3.5 h-3.5" />
+            <span>Vue Liste Détaillée des Lots ({totalElements})</span>
+          </button>
         </div>
+
+        {viewMode === 'diagram' && canEdit && (
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode('list');
+              setIsAddingPhase(true);
+            }}
+            className="px-3.5 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Ajouter une Phase / Tâche</span>
+          </button>
+        )}
       </div>
+
+      {/* Main Content: Either the Automated WBS Tree Visualizer or Detailed List */}
+      {viewMode === 'diagram' ? (
+        <WbsDiagramVisualizer
+          project={project}
+          onUpdateProject={onUpdateProject}
+          canEdit={canEdit}
+        />
+      ) : (
+        <>
+          {/* Info notice about flow: WBS -> RACI -> Gantt */}
+          <div className="p-3.5 bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-200/80 dark:border-indigo-800/60 rounded-xl flex items-start gap-2.5 text-xs text-indigo-900 dark:text-indigo-200">
+            <Info className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <span className="font-bold">Découpage structurant WBS :</span>
+              <p className="text-[11px] text-indigo-800 dark:text-indigo-300 leading-relaxed">
+                Listez ici l'ensemble des <strong>Phases</strong>, <strong>Tâches</strong> et <strong>Jalons</strong> du projet. Ils sont directement synchronisés avec la <strong>Matrice RACI</strong> (responsabilités par groupe de parties prenantes) et la <strong>Planification Gantt</strong> (où vous définirez les dates et assignations).
+              </p>
+            </div>
+          </div>
 
       {/* Add New Phase Form */}
       {isAddingPhase && canEdit && (
@@ -635,6 +692,8 @@ export default function WbsTab({
             );
           })}
         </div>
+      )}
+        </>
       )}
 
       {/* Item Editing Modal */}

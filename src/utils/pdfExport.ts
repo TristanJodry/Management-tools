@@ -28,9 +28,111 @@ export function sanitizePdfText(str: any): string {
     .replace(/[≥]/g, '>=')
     .replace(/[≤]/g, '<=')
     .replace(/[€]/g, 'EUR')
-    .replace(/[%Æ]/g, '')
+    .replace(/Æ/g, 'AE') // Preserve % ! Do not strip percent symbols
     .replace(/[\uFFFD]/g, '')
     .trim();
+}
+
+// Helper to compute actual KPI compliance progress
+export function computeKpiProgress(k: Kpi): number {
+  if (k.status !== undefined && k.status !== null && !isNaN(Number(k.status))) {
+    return Math.round(Number(k.status));
+  }
+  const curValNum = parseFloat(String(k.currentValue || '').replace(',', '.').replace(/[^\d.-]/g, ''));
+  const tgtValNum = parseFloat(String(k.targetValue || '').replace(',', '.').replace(/[^\d.-]/g, ''));
+  if (!isNaN(curValNum) && !isNaN(tgtValNum) && tgtValNum > 0) {
+    return Math.min(200, Math.max(0, Math.round((curValNum / tgtValNum) * 100)));
+  }
+  if (k.statusScore === 'ok') return 100;
+  if (k.statusScore === 'warning') return 50;
+  if (k.statusScore === 'alert') return 25;
+  return 100;
+}
+
+// Helper to format KPI values with proper unit and symbol without corruption
+export function formatKpiDisplay(val: string | number | undefined, unit?: string, metricType?: string): string {
+  if (val === undefined || val === null) return '-';
+  const raw = String(val).trim();
+  if (!raw || raw === '-') return '-';
+
+  const isPercent =
+    unit === '%' ||
+    metricType === 'percentage' ||
+    metricType === 'percent' ||
+    raw.includes('%');
+
+  if (isPercent) {
+    const cleanNum = raw.replace('%', '').trim();
+    return `${cleanNum} %`;
+  }
+
+  const isCurrency =
+    unit === 'EUR' ||
+    unit === '€' ||
+    metricType === 'currency' ||
+    raw.includes('EUR') ||
+    raw.includes('€');
+
+  if (isCurrency) {
+    const cleanNum = raw.replace(/EUR|€/gi, '').trim();
+    return `${cleanNum} EUR`;
+  }
+
+  if (unit && unit !== 'ratio' && unit !== 'score' && unit !== 'none' && !raw.toLowerCase().includes(unit.toLowerCase())) {
+    return `${raw} ${unit}`;
+  }
+
+  return raw;
+}
+
+// Helper to determine status evaluation label & color
+export function getKpiStatusBadge(scoreVal: number, statusScore?: string): { label: string; textCol: [number, number, number] } {
+  if (statusScore === 'alert' || scoreVal < 50) {
+    return { label: 'Alerte (Rouge)', textCol: [220, 38, 38] };
+  }
+  if (statusScore === 'warning' || scoreVal < 80) {
+    return { label: 'Vigilance (Orange)', textCol: [217, 119, 6] };
+  }
+  return { label: 'Conforme (Vert)', textCol: [22, 101, 52] };
+}
+
+// Helper to draw rounded rectangle in Canvas without path accumulation
+export function drawCanvasRoundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+  fill?: string,
+  stroke?: string,
+  lineWidth = 1
+) {
+  ctx.beginPath();
+  const radius = Math.max(0, Math.min(r, w / 2, h / 2));
+  if (typeof (ctx as any).roundRect === 'function') {
+    (ctx as any).roundRect(x, y, w, h, radius);
+  } else {
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + w - radius, y);
+    ctx.arcTo(x + w, y, x + w, y + radius, radius);
+    ctx.lineTo(x + w, y + h - radius);
+    ctx.arcTo(x + w, y + h, x + w - radius, y + h, radius);
+    ctx.lineTo(x + radius, y + h);
+    ctx.arcTo(x, y + h, x, y, radius);
+    ctx.lineTo(x, y + radius);
+    ctx.arcTo(x, y, x + radius, y, radius);
+    ctx.closePath();
+  }
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+  }
 }
 
 // Normalizer for RACI row matching (handles past prefixes or unicode characters)
@@ -200,12 +302,12 @@ function generateBudgetPieCharts(budgetGroups: BudgetGroup[]): { groupsImg: stri
   };
 }
 
-// 5x5 Risk Matrix Canvas graphic generator
+// 5x5 Risk Matrix Canvas graphic generator with clean executive theme and safe path rendering
 export function generateRiskMatrixCanvasDataUrl(risks: any[]): string | null {
   if (typeof document === 'undefined') return null;
   try {
     const width = 800;
-    const height = 500;
+    const height = 430;
     const canvas = document.createElement('canvas');
     canvas.width = width * 2; // Retina 2x
     canvas.height = height * 2;
@@ -214,20 +316,59 @@ export function generateRiskMatrixCanvasDataUrl(risks: any[]): string | null {
 
     ctx.scale(2, 2);
 
-    // Dark background container matching the app tool
-    ctx.fillStyle = '#0f172a';
-    if (typeof (ctx as any).roundRect === 'function') {
-      (ctx as any).roundRect(0, 0, width, height, 14);
-      ctx.fill();
-    } else {
-      ctx.fillRect(0, 0, width, height);
-    }
+    const safeRisks = Array.isArray(risks)
+      ? risks.filter((r) => r && (r.desc || r.prob || r.impact))
+      : [];
+    const totalRisks = safeRisks.length;
+    const critCount = safeRisks.filter(
+      (r) => Number(r.prob || 1) * Number(r.impact || 1) >= 15
+    ).length;
+    const highCount = safeRisks.filter((r) => {
+      const s = Number(r.prob || 1) * Number(r.impact || 1);
+      return s >= 10 && s < 15;
+    }).length;
+    const medCount = safeRisks.filter((r) => {
+      const s = Number(r.prob || 1) * Number(r.impact || 1);
+      return s >= 5 && s < 10;
+    }).length;
+    const lowCount = safeRisks.filter(
+      (r) => Number(r.prob || 1) * Number(r.impact || 1) < 5
+    ).length;
 
-    // Title
-    ctx.font = 'bold 14px Helvetica, Arial, sans-serif';
+    // Container background (Crisp executive white card with subtle slate border)
+    drawCanvasRoundRect(ctx, 0, 0, width, height, 8, '#ffffff', '#cbd5e1', 1.5);
+
+    // Header bar (Slate 900)
+    drawCanvasRoundRect(ctx, 1, 1, width - 2, 34, 7, '#1e293b');
+    ctx.beginPath();
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(1, 20, width - 2, 15);
+
+    // Title text
+    ctx.font = 'bold 11.5px Helvetica, Arial, sans-serif';
     ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'center';
-    ctx.fillText('MATRICE DES RISQUES : IMPACT VS PROBABILITÉ', width / 2, 32);
+    ctx.textAlign = 'left';
+    ctx.fillText(
+      "MATRICE D'ÉVALUATION DES RISQUES (5×5) : IMPACT VS PROBABILITÉ",
+      14,
+      21
+    );
+
+    // Header summary metrics on top right
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 9.5px Helvetica, Arial, sans-serif';
+    ctx.fillStyle = '#f87171';
+    ctx.fillText(`${critCount} Critique(s)`, width - 14, 14);
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillText(`${highCount} Élevé(s)`, width - 110, 14);
+    ctx.fillStyle = '#fef08a';
+    ctx.fillText(`${medCount} Moyen(s)`, width - 190, 14);
+    ctx.fillStyle = '#34d399';
+    ctx.fillText(`${lowCount} Faible(s)`, width - 275, 14);
+
+    ctx.font = 'normal 9px Helvetica, Arial, sans-serif';
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText(`Total : ${totalRisks} risque(s) répertorié(s)`, width - 14, 28);
 
     // Axis definitions
     const impacts = [5, 4, 3, 2, 1];
@@ -240,62 +381,63 @@ export function generateRiskMatrixCanvasDataUrl(risks: any[]): string | null {
       1: '1 - Mineur'
     };
     const probLabels: Record<number, string> = {
-      1: 'P1',
-      2: 'P2',
-      3: 'P3',
-      4: 'P4',
-      5: 'P5'
+      1: 'P1 - Improbable',
+      2: 'P2 - Rare',
+      3: 'P3 - Possible',
+      4: 'P4 - Probable',
+      5: 'P5 - Quasi Certain'
     };
 
     // Grid geometry
-    const gridX = 135;
-    const gridY = 52;
-    const gridW = width - gridX - 25;
-    const gridH = height - gridY - 50;
-    const cellW = (gridW - (4 * 7)) / 5;
-    const cellH = (gridH - (4 * 7)) / 5;
+    const gridX = 110;
+    const gridY = 48;
+    const gridW = width - gridX - 18;
+    const gridH = height - gridY - 42;
+    const cellGap = 6;
+    const cellW = (gridW - 4 * cellGap) / 5;
+    const cellH = (gridH - 4 * cellGap) / 5;
 
     // Y-Axis label (Rotated text on left)
     ctx.save();
-    ctx.translate(24, gridY + gridH / 2);
+    ctx.translate(18, gridY + gridH / 2);
     ctx.rotate(-Math.PI / 2);
-    ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
-    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 10px Helvetica, Arial, sans-serif';
+    ctx.fillStyle = '#475569';
     ctx.textAlign = 'center';
-    ctx.fillText('<- IMPACT (GRAVITE)', 0, 0);
+    ctx.fillText('← IMPACT (GRAVITÉ)', 0, 0);
     ctx.restore();
 
     // X-Axis label at bottom
-    ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
-    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 10px Helvetica, Arial, sans-serif';
+    ctx.fillStyle = '#475569';
     ctx.textAlign = 'center';
-    ctx.fillText('PROBABILITE (FREQUENCE) ->', gridX + gridW / 2, height - 12);
+    ctx.fillText('PROBABILITÉ (FRÉQUENCE) →', gridX + gridW / 2, height - 8);
 
     // Draw grid cells & Y-axis row labels
     impacts.forEach((imp, rowIdx) => {
-      const y = gridY + rowIdx * (cellH + 7);
+      const y = gridY + rowIdx * (cellH + cellGap);
 
       // Y-axis label
-      ctx.font = 'bold 10.5px Helvetica, Arial, sans-serif';
-      ctx.fillStyle = '#cbd5e1';
+      ctx.font = 'bold 9.5px Helvetica, Arial, sans-serif';
+      ctx.fillStyle = '#334155';
       ctx.textAlign = 'right';
-      ctx.fillText(impactLabels[imp], gridX - 10, y + cellH / 2 + 4);
+      ctx.fillText(impactLabels[imp], gridX - 8, y + cellH / 2 + 3.5);
 
       probabilities.forEach((prob, colIdx) => {
-        const x = gridX + colIdx * (cellW + 7);
+        const x = gridX + colIdx * (cellW + cellGap);
         const score = imp * prob;
 
-        // Cell background color and borders based on score
-        let cellBg = '#ecfdf5'; // emerald (1-4)
-        let cellBorder = '#a7f3d0';
-        let scoreTextColor = '#065f46';
-        let badgeBg = '#059669';
+        // Clean pastel backgrounds matching app RiskMatrixVisualizer
+        let cellBg = '#f0fdf4'; // emerald (1-4)
+        let cellBorder = '#bbf7d0';
+        let scoreTextColor = '#166534';
+        let badgeBg = '#15803d';
 
         if (score >= 15) {
-          cellBg = '#ffe4e6'; // rose (15-25)
-          cellBorder = '#fecdd3';
-          scoreTextColor = '#9f1239';
-          badgeBg = '#e11d48';
+          cellBg = '#fee2e2'; // rose (15-25)
+          cellBorder = '#fca5a5';
+          scoreTextColor = '#991b1b';
+          badgeBg = '#dc2626';
         } else if (score >= 10) {
           cellBg = '#fef3c7'; // amber (10-14)
           cellBorder = '#fde68a';
@@ -308,67 +450,51 @@ export function generateRiskMatrixCanvasDataUrl(risks: any[]): string | null {
           badgeBg = '#ca8a04';
         }
 
-        // Draw rounded cell
-        ctx.fillStyle = cellBg;
-        ctx.strokeStyle = cellBorder;
-        ctx.lineWidth = 1.2;
-        if (typeof (ctx as any).roundRect === 'function') {
-          (ctx as any).roundRect(x, y, cellW, cellH, 6);
-          ctx.fill();
-          ctx.stroke();
-        } else {
-          ctx.fillRect(x, y, cellW, cellH);
-          ctx.strokeRect(x, y, cellW, cellH);
-        }
+        // Draw clean rounded cell
+        drawCanvasRoundRect(ctx, x, y, cellW, cellH, 6, cellBg, cellBorder, 1.2);
 
-        // Draw Score label inside cell (top left)
-        ctx.font = 'bold 9.5px Helvetica, Arial, sans-serif';
+        // Score label inside cell (top left)
+        ctx.font = 'bold 9px Helvetica, Arial, sans-serif';
         ctx.fillStyle = scoreTextColor;
         ctx.textAlign = 'left';
-        ctx.fillText(`Score: ${score}`, x + 6, y + 14);
+        ctx.fillText(`Score ${score}`, x + 6, y + 13);
 
-        // Find risks in this cell
-        const cellRisks = (risks || []).filter(r => (r.prob || 1) === prob && (r.impact || 1) === imp);
+        // Find matching risks in this cell
+        const cellRisks = safeRisks.filter(
+          (r) => Number(r.prob || 1) === prob && Number(r.impact || 1) === imp
+        );
 
         if (cellRisks.length > 0) {
-          // Count pill at top right of cell
-          ctx.fillStyle = '#0f172a';
-          const pillW = 16;
-          const pillH = 13;
-          const pillX = x + cellW - pillW - 5;
-          const pillY = y + 5;
-          if (typeof (ctx as any).roundRect === 'function') {
-            (ctx as any).roundRect(pillX, pillY, pillW, pillH, 3);
-            ctx.fill();
-          } else {
-            ctx.fillRect(pillX, pillY, pillW, pillH);
-          }
-          ctx.font = 'bold 8.5px Helvetica, Arial, sans-serif';
+          // Pill badge for risk count (top right)
+          drawCanvasRoundRect(ctx, x + cellW - 20, y + 4, 15, 12, 3, '#1e293b');
+          ctx.font = 'bold 8px Helvetica, Arial, sans-serif';
           ctx.fillStyle = '#ffffff';
           ctx.textAlign = 'center';
-          ctx.fillText(`${cellRisks.length}`, pillX + pillW / 2, pillY + 9.5);
+          ctx.fillText(`${cellRisks.length}`, x + cellW - 12.5, y + 13);
 
-          // Draw risk pills inside cell
-          let badgeY = y + 21;
+          // Draw up to 2 risk pills inside the cell
+          let badgeY = y + 19;
           const maxBadges = Math.min(cellRisks.length, 2);
           for (let b = 0; b < maxBadges; b++) {
             const risk = cellRisks[b];
-            const bWidth = cellW - 12;
-            const bHeight = 17;
-            ctx.fillStyle = badgeBg;
-            if (typeof (ctx as any).roundRect === 'function') {
-              (ctx as any).roundRect(x + 6, badgeY, bWidth, bHeight, 4);
-              ctx.fill();
-            } else {
-              ctx.fillRect(x + 6, badgeY, bWidth, bHeight);
-            }
-            ctx.font = 'bold 8.5px Helvetica, Arial, sans-serif';
+            const bWidth = cellW - 10;
+            const bHeight = 15;
+            drawCanvasRoundRect(ctx, x + 5, badgeY, bWidth, bHeight, 3, badgeBg);
+
+            ctx.font = 'bold 8px Helvetica, Arial, sans-serif';
             ctx.fillStyle = '#ffffff';
             ctx.textAlign = 'left';
-            const text = risk.desc || 'Risque';
-            const truncated = text.length > 17 ? text.slice(0, 15) + '...' : text;
-            ctx.fillText(truncated, x + 9, badgeY + 11.5);
-            badgeY += 19;
+            const rawDesc = sanitizePdfText(risk.desc || 'Risque');
+            const truncated = rawDesc.length > 17 ? rawDesc.slice(0, 15) + '..' : rawDesc;
+            ctx.fillText(truncated, x + 8, badgeY + 10.5);
+            badgeY += 17;
+          }
+
+          if (cellRisks.length > 2) {
+            ctx.font = 'italic 7.5px Helvetica, Arial, sans-serif';
+            ctx.fillStyle = scoreTextColor;
+            ctx.textAlign = 'right';
+            ctx.fillText(`+${cellRisks.length - 2} autre(s)`, x + cellW - 6, y + cellH - 4);
           }
         }
       });
@@ -376,16 +502,419 @@ export function generateRiskMatrixCanvasDataUrl(risks: any[]): string | null {
 
     // Draw X-axis column labels at bottom (P1 to P5)
     probabilities.forEach((prob, colIdx) => {
-      const x = gridX + colIdx * (cellW + 7) + cellW / 2;
-      ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
-      ctx.fillStyle = '#cbd5e1';
+      const x = gridX + colIdx * (cellW + cellGap) + cellW / 2;
+      ctx.font = 'bold 9px Helvetica, Arial, sans-serif';
+      ctx.fillStyle = '#334155';
       ctx.textAlign = 'center';
-      ctx.fillText(probLabels[prob], x, gridY + gridH + 16);
+      ctx.fillText(probLabels[prob], x, gridY + gridH + 15);
     });
 
     return canvas.toDataURL('image/png');
   } catch (err) {
     console.error('Erreur génération matrice de risque canvas:', err);
+    return null;
+  }
+}
+
+// Helper to wrap text into multiple lines for canvas rendering
+function wrapCanvasText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number
+): string[] {
+  if (!text) return [];
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    const testWidth = ctx.measureText(testLine).width;
+    if (testWidth > maxWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+  return lines;
+}
+
+// 5x5 WBS Tree Organigramme Canvas Generator matching user screenshot & WbsDiagramVisualizer
+export function generateWbsTreeCanvasDataUrl(project: Project): string | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    const phases = (project.ganttPhases || []).filter(
+      (p) => (p.items && p.items.length > 0) || (p.name && p.name.trim().length > 0)
+    );
+    if (phases.length === 0) return null;
+
+    const numPhases = phases.length;
+    // Determine column widths based on number of phases
+    let colW = 260;
+    if (numPhases === 1) colW = 340;
+    else if (numPhases === 2) colW = 300;
+    else if (numPhases === 3) colW = 270;
+    else if (numPhases === 4) colW = 240;
+    else colW = 220;
+
+    const colGap = 20;
+    const paddingX = 24;
+    const width = Math.max(880, paddingX * 2 + numPhases * colW + (numPhases - 1) * colGap);
+
+    // Calculate height needed for each column's tasks container
+    const columnHeights = phases.map((phase) => {
+      const items = phase.items || [];
+      if (items.length === 0) return 60;
+      let h = 16; // top padding inside tasks container
+      items.forEach((item) => {
+        h += 38; // task card
+        const subtasks = item.subtasks || [];
+        if (subtasks.length > 0) {
+          h += 12; // subtask container padding
+          subtasks.forEach((sub) => {
+            h += 26; // subtask card
+            const subsubs = sub.subtasks || [];
+            if (subsubs.length > 0) {
+              h += 10;
+              subsubs.forEach(() => {
+                h += 22;
+              });
+            }
+            h += 6; // gap between subtasks
+          });
+        }
+        h += 12; // gap between tasks
+      });
+      return h + 14; // bottom padding
+    });
+
+    const maxContainerH = Math.max(...columnHeights, 80);
+    // Root banner (44px) + vertical line (22px) + distributor ribbon (26px) + vertical line (14px) + phase card (48px) + vertical line (16px) = 170px
+    const topOffset = 174;
+    const height = topOffset + maxContainerH + 30;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width * 2; // Retina 2x
+    canvas.height = height * 2;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.scale(2, 2);
+
+    // Canvas background
+    drawCanvasRoundRect(ctx, 0, 0, width, height, 10, '#f8fafc', '#e2e8f0', 1.5);
+
+    // ==========================================
+    // LEVEL 0: ROOT BANNER (MON PROJET)
+    // ==========================================
+    const rootW = Math.min(width - 60, 480);
+    const rootH = 42;
+    const rootX = (width - rootW) / 2;
+    const rootY = 18;
+
+    // Draw salmon / peach root card
+    drawCanvasRoundRect(ctx, rootX, rootY, rootW, rootH, 8, '#dfb2a9', '#cfa097', 1.5);
+
+    ctx.font = 'bold 14px Helvetica, Arial, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    const projectName = sanitizePdfText(project.name || 'MON PROJET').toUpperCase();
+    ctx.fillText(projectName, rootX + rootW / 2, rootY + 26);
+
+    // Vertical connector line from root to distributor
+    const distY = rootY + rootH + 20; // 80
+    ctx.beginPath();
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 2;
+    ctx.moveTo(width / 2, rootY + rootH);
+    ctx.lineTo(width / 2, distY);
+    ctx.stroke();
+
+    // ==========================================
+    // LEVEL 1: DISTRIBUTOR RIBBON & PHASES
+    // ==========================================
+    const distH = 24;
+    const firstColCenterX = paddingX + colW / 2;
+    const lastColCenterX = paddingX + (numPhases - 1) * (colW + colGap) + colW / 2;
+    const distStartX = Math.max(14, firstColCenterX - colW / 2 + 10);
+    const distEndX = Math.min(width - 14, lastColCenterX + colW / 2 - 10);
+    const distWidth = distEndX - distStartX;
+
+    // Light blue ribbon
+    drawCanvasRoundRect(ctx, distStartX, distY, distWidth, distH, 6, '#b9d8e6', '#93c5fd', 1);
+
+    // Horizontal distributor line inside ribbon
+    ctx.beginPath();
+    ctx.strokeStyle = '#1e3a5f';
+    ctx.lineWidth = 1.5;
+    ctx.moveTo(firstColCenterX, distY + distH / 2);
+    ctx.lineTo(lastColCenterX, distY + distH / 2);
+    ctx.stroke();
+
+    const phaseCardY = distY + distH + 16; // 120
+    const phaseCardH = 48;
+
+    phases.forEach((phase, pIdx) => {
+      const colX = paddingX + pIdx * (colW + colGap);
+      const colCenterX = colX + colW / 2;
+
+      // Downward line from distributor line to phase card
+      ctx.beginPath();
+      ctx.strokeStyle = '#1e3a5f';
+      ctx.lineWidth = 2;
+      ctx.moveTo(colCenterX, distY + distH / 2);
+      ctx.lineTo(colCenterX, phaseCardY);
+      ctx.stroke();
+
+      // Downward arrowhead pointing into phase card
+      ctx.beginPath();
+      ctx.fillStyle = '#1e3a5f';
+      ctx.moveTo(colCenterX, phaseCardY);
+      ctx.lineTo(colCenterX - 4, phaseCardY - 6);
+      ctx.lineTo(colCenterX + 4, phaseCardY - 6);
+      ctx.closePath();
+      ctx.fill();
+
+      // Phase Card (Navy rounded rectangle)
+      drawCanvasRoundRect(ctx, colX, phaseCardY, colW, phaseCardH, 8, '#1e3a5f', '#0f172a', 1.5);
+
+      // Phase title with wrapping
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px Helvetica, Arial, sans-serif';
+      ctx.textAlign = 'center';
+      const phaseCode = `${pIdx + 1}.`;
+      const phaseTitle = `${phaseCode} ${sanitizePdfText(phase.name || `Phase ${pIdx + 1}`)}`;
+      const phaseLines = wrapCanvasText(ctx, phaseTitle, colW - 16);
+      if (phaseLines.length === 1) {
+        ctx.fillText(phaseLines[0], colCenterX, phaseCardY + 28);
+      } else {
+        ctx.fillText(phaseLines[0], colCenterX, phaseCardY + 21);
+        ctx.fillText(phaseLines[1] || '', colCenterX, phaseCardY + 36);
+      }
+
+      // Vertical connector from Phase Card to Tasks container
+      const containerY = phaseCardY + phaseCardH + 16;
+      const currentContainerH = columnHeights[pIdx];
+
+      ctx.beginPath();
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 2;
+      ctx.moveTo(colCenterX, phaseCardY + phaseCardH);
+      ctx.lineTo(colCenterX, containerY);
+      ctx.stroke();
+
+      // Downward arrow into container
+      ctx.beginPath();
+      ctx.fillStyle = '#334155';
+      ctx.moveTo(colCenterX, containerY);
+      ctx.lineTo(colCenterX - 4, containerY - 6);
+      ctx.lineTo(colCenterX + 4, containerY - 6);
+      ctx.closePath();
+      ctx.fill();
+
+      // ==========================================
+      // LEVEL 2: TASKS CONTAINER (Soft Cyan)
+      // ==========================================
+      drawCanvasRoundRect(
+        ctx,
+        colX,
+        containerY,
+        colW,
+        currentContainerH,
+        8,
+        '#c5e6ef',
+        '#a6d5e1',
+        1.5
+      );
+
+      const items = phase.items || [];
+      if (items.length === 0) {
+        ctx.font = 'italic 10px Helvetica, Arial, sans-serif';
+        ctx.fillStyle = '#64748b';
+        ctx.textAlign = 'center';
+        ctx.fillText('Aucune tâche définie', colCenterX, containerY + 34);
+      } else {
+        // Spine line inside container on the left
+        const spineX = colX + 16;
+        ctx.beginPath();
+        ctx.strokeStyle = '#1e3a5f';
+        ctx.lineWidth = 2;
+        ctx.moveTo(spineX, containerY + 12);
+        ctx.lineTo(spineX, containerY + currentContainerH - 14);
+        ctx.stroke();
+
+        let itemY = containerY + 12;
+
+        items.forEach((item, tIdx) => {
+          const taskCode = `${pIdx + 1}.${tIdx + 1}.`;
+          const isMilestone = item.type === 'milestone';
+          const cardH = 34;
+          const cardX = colX + 28;
+          const cardW = colW - 38;
+          const taskCenterY = itemY + cardH / 2;
+
+          // Branch arrow from spine to task card
+          ctx.beginPath();
+          ctx.strokeStyle = '#1e3a5f';
+          ctx.lineWidth = 1.5;
+          ctx.moveTo(spineX, taskCenterY);
+          ctx.lineTo(cardX, taskCenterY);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.fillStyle = '#1e3a5f';
+          ctx.moveTo(cardX, taskCenterY);
+          ctx.lineTo(cardX - 4, taskCenterY - 3);
+          ctx.lineTo(cardX - 4, taskCenterY + 3);
+          ctx.closePath();
+          ctx.fill();
+
+          // Task Card
+          const taskBg = isMilestone ? '#0f766e' : '#1e3a5f';
+          const taskBorder = isMilestone ? '#14b8a6' : '#334155';
+          drawCanvasRoundRect(ctx, cardX, itemY, cardW, cardH, 6, taskBg, taskBorder, 1);
+
+          // Task Title
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 9.5px Helvetica, Arial, sans-serif';
+          ctx.textAlign = 'left';
+          const taskName = `${taskCode} ${sanitizePdfText(item.name || 'Tâche')}`;
+          const maxTextW = isMilestone ? cardW - 55 : cardW - 14;
+          const lines = wrapCanvasText(ctx, taskName, maxTextW);
+          if (lines.length === 1) {
+            ctx.fillText(lines[0], cardX + 7, itemY + 21);
+          } else {
+            ctx.fillText(lines[0], cardX + 7, itemY + 15);
+            ctx.fillText(lines[1] || '', cardX + 7, itemY + 27);
+          }
+
+          // Milestone badge
+          if (isMilestone) {
+            drawCanvasRoundRect(ctx, cardX + cardW - 46, itemY + 9, 40, 16, 3, '#f59e0b');
+            ctx.font = 'bold 8px Helvetica, Arial, sans-serif';
+            ctx.fillStyle = '#0f172a';
+            ctx.textAlign = 'center';
+            ctx.fillText('JALON', cardX + cardW - 26, itemY + 20.5);
+          }
+
+          itemY += cardH + 6;
+
+          // ==========================================
+          // LEVEL 3: SUBTASKS (Soft Green Container)
+          // ==========================================
+          const subtasks = item.subtasks || [];
+          if (subtasks.length > 0) {
+            let subContainerH = 10;
+            subtasks.forEach((s) => {
+              subContainerH += 26;
+              const subsubs = s.subtasks || [];
+              if (subsubs.length > 0) {
+                subContainerH += 10 + subsubs.length * 22;
+              }
+              subContainerH += 6;
+            });
+
+            const subContainerX = cardX + 8;
+            const subContainerW = cardW - 10;
+            drawCanvasRoundRect(
+              ctx,
+              subContainerX,
+              itemY,
+              subContainerW,
+              subContainerH,
+              6,
+              '#d8edd5',
+              '#b8dcba',
+              1
+            );
+
+            // Subtask spine line
+            const subSpineX = subContainerX + 10;
+            ctx.beginPath();
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 1.5;
+            ctx.moveTo(subSpineX, itemY + 8);
+            ctx.lineTo(subSpineX, itemY + subContainerH - 10);
+            ctx.stroke();
+
+            let subY = itemY + 8;
+            subtasks.forEach((sub, sIdx) => {
+              const subCode = `${taskCode}${sIdx + 1}.`;
+              const subCardX = subContainerX + 18;
+              const subCardW = subContainerW - 24;
+              const subCardH = 22;
+              const subCenterY = subY + subCardH / 2;
+
+              // Arrow from sub spine to sub card
+              ctx.beginPath();
+              ctx.strokeStyle = '#475569';
+              ctx.lineWidth = 1.2;
+              ctx.moveTo(subSpineX, subCenterY);
+              ctx.lineTo(subCardX, subCenterY);
+              ctx.stroke();
+
+              ctx.beginPath();
+              ctx.fillStyle = '#475569';
+              ctx.moveTo(subCardX, subCenterY);
+              ctx.lineTo(subCardX - 3, subCenterY - 2.5);
+              ctx.lineTo(subCardX - 3, subCenterY + 2.5);
+              ctx.closePath();
+              ctx.fill();
+
+              // Subtask white card
+              drawCanvasRoundRect(ctx, subCardX, subY, subCardW, subCardH, 4, '#ffffff', '#cbd5e1', 1);
+
+              ctx.font = 'bold 8.5px Helvetica, Arial, sans-serif';
+              ctx.fillStyle = '#1e3a5f';
+              ctx.textAlign = 'left';
+              const subTitle = `${subCode} ${sanitizePdfText(sub.name)}`;
+              const subLines = wrapCanvasText(ctx, subTitle, subCardW - 10);
+              ctx.fillText(subLines[0] || subTitle, subCardX + 5, subY + 14.5);
+
+              subY += subCardH + 5;
+
+              // Level 4 Sub-subtasks
+              const level4 = sub.subtasks || [];
+              if (level4.length > 0) {
+                const l4ContainerH = 6 + level4.length * 20;
+                const l4ContainerX = subCardX + 6;
+                const l4ContainerW = subCardW - 8;
+                drawCanvasRoundRect(ctx, l4ContainerX, subY, l4ContainerW, l4ContainerH, 4, '#fde2cc', '#f8c49e', 1);
+
+                let l4Y = subY + 4;
+                level4.forEach((sub4, ssIdx) => {
+                  const s4Code = `${subCode}${ssIdx + 1}.`;
+                  const s4CardX = l4ContainerX + 8;
+                  const s4CardW = l4ContainerW - 12;
+                  const s4CardH = 16;
+                  drawCanvasRoundRect(ctx, s4CardX, l4Y, s4CardW, s4CardH, 3, '#ffffff', '#e2e8f0', 0.8);
+                  ctx.font = 'normal 7.5px Helvetica, Arial, sans-serif';
+                  ctx.fillStyle = '#1e3a5f';
+                  ctx.textAlign = 'left';
+                  ctx.fillText(`${s4Code} ${sanitizePdfText(sub4.name)}`, s4CardX + 4, l4Y + 11);
+                  l4Y += 19;
+                });
+
+                subY += l4ContainerH + 5;
+              }
+            });
+
+            itemY += subContainerH + 6;
+          }
+
+          itemY += 6;
+        });
+      }
+    });
+
+    return canvas.toDataURL('image/png');
+  } catch (err) {
+    console.error('Erreur génération organigramme WBS canvas:', err);
     return null;
   }
 }
@@ -771,6 +1300,20 @@ export function exportWbsPDF(project: Project) {
   doc.text(`Jalons cles (N2) : ${totalMilestones}`, 145, currentY + 6.2);
 
   currentY += 15;
+
+  // Visual WBS Tree Diagram snapshot
+  const wbsDiagramImg = generateWbsTreeCanvasDataUrl(project);
+  if (wbsDiagramImg) {
+    doc.addImage(wbsDiagramImg, 'PNG', 14, currentY, 182, 85);
+    currentY += 90;
+  }
+
+  // If table won't fit on page 1, start clean on page 2
+  if (currentY > 180) {
+    doc.addPage();
+    addPdfHeader(doc, project, 'Matrice WBS (Détail des Lots & Tâches)');
+    currentY = 35;
+  }
 
   const tableData: any[] = [];
   phases.forEach((phase, pIdx) => {
@@ -1407,12 +1950,12 @@ export function exportRisksPDF(project: Project) {
   // 5x5 Heatmap Image
   const heatmapImg = generateRiskMatrixCanvasDataUrl(risks);
   if (heatmapImg) {
-    doc.addImage(heatmapImg, 'PNG', 14, currentY, 182, 114);
-    currentY += 120;
+    doc.addImage(heatmapImg, 'PNG', 14, currentY, 182, 85);
+    currentY += 89;
   }
 
   // If table won't fit on current page, start clean on new page
-  if (currentY + 45 > doc.internal.pageSize.getHeight() - 20) {
+  if (currentY + 22 > doc.internal.pageSize.getHeight() - 20) {
     doc.addPage();
     addPdfHeader(doc, project, 'Registre & Matrice des Risques');
     currentY = 36;
@@ -1697,16 +2240,19 @@ export function exportKpisPDF(project: Project) {
   currentY += 20;
 
   const kpiRows = kpis.map((k, idx) => {
-    const scoreVal = k.status ?? (k.statusScore === 'ok' ? 100 : k.statusScore === 'warning' ? 50 : 25);
-    const scoreBadge = scoreVal >= 80 ? 'CONFORME (Vert)' : scoreVal >= 50 ? 'VIGILANCE (Orange)' : 'ALERTE (Rouge)';
+    const scoreVal = computeKpiProgress(k);
+    const badgeInfo = getKpiStatusBadge(scoreVal, k.statusScore);
+    const targetStr = formatKpiDisplay(k.targetValue, k.unit, k.metricType);
+    const currentStr = formatKpiDisplay(k.currentValue, k.unit, k.metricType);
+
     return [
       `KPI-${idx + 1}`,
       sanitizePdfText(k.name || 'Indicateur') + (k.category ? `\n[${sanitizePdfText(k.category)}]` : ''),
       k.metricType || 'Nombre',
-      k.targetValue ? sanitizePdfText(`${k.targetValue} ${k.unit && k.unit !== 'ratio' && k.unit !== 'score' ? k.unit : ''}`.trim()) : '-',
-      k.currentValue ? sanitizePdfText(`${k.currentValue} ${k.unit && k.unit !== 'ratio' && k.unit !== 'score' ? k.unit : ''}`.trim()) : '-',
-      `${scoreVal}%`,
-      scoreBadge
+      targetStr,
+      currentStr,
+      `${scoreVal} %`,
+      badgeInfo.label
     ];
   });
 
@@ -1718,10 +2264,20 @@ export function exportKpisPDF(project: Project) {
     alternateRowStyles: { fillColor: [248, 250, 252] },
     styles: { fontSize: 8, cellPadding: 3 },
     columnStyles: {
-      0: { cellWidth: 15, fontStyle: 'bold' },
+      0: { cellWidth: 15, fontStyle: 'bold', halign: 'center' },
       1: { cellWidth: 50 },
+      3: { halign: 'center' },
+      4: { halign: 'center' },
       5: { halign: 'center', fontStyle: 'bold' },
       6: { halign: 'center', fontStyle: 'bold' }
+    },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.column.index === 6) {
+        const val = String(data.cell.raw || '');
+        if (val.includes('Alerte')) data.cell.styles.textColor = [220, 38, 38];
+        else if (val.includes('Vigilance')) data.cell.styles.textColor = [217, 119, 6];
+        else data.cell.styles.textColor = [22, 101, 52];
+      }
     },
     margin: { left: 14, right: 14 }
   });
@@ -2085,8 +2641,12 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
     }
   };
 
-  const drawSectionHeader = (title: string, bgColor: [number, number, number] = [30, 41, 59]) => {
-    checkPageBreak(18);
+  const drawSectionHeader = (
+    title: string,
+    bgColor: [number, number, number] = [30, 41, 59],
+    minNeededBelow: number = 30
+  ) => {
+    checkPageBreak(minNeededBelow + 8);
     doc.setFillColor(bgColor[0], bgColor[1], bgColor[2]);
     doc.rect(14, currentY, contentWidth, 6, 'F');
     doc.setFontSize(7.5);
@@ -2242,11 +2802,12 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
   // ==========================================
   const decisions = (project.decisionMatrix || []).filter(d => (d.title && d.title.trim().length > 0) || (d.options && d.options.length > 0));
   if (decisions.length > 0) {
-    drawSectionHeader(`${sectionCounter++}. Matrices de Decision & Arbitrages`);
+    drawSectionHeader(`${sectionCounter++}. Matrices de Decision & Arbitrages`, [30, 41, 59], 35);
     decisions.forEach((d, idx) => {
-      if (idx > 0 && currentY + 50 > doc.internal.pageSize.getHeight() - 20) {
+      if (idx > 0 && currentY + 45 > 275) {
         doc.addPage();
-        currentY = 22;
+        addPdfHeader(doc, project, 'Synthèse Exécutive (Suite)', 'p');
+        currentY = 35;
       }
       doc.setFontSize(8.5);
       doc.setFont('helvetica', 'bold');
@@ -2269,41 +2830,42 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
   // ==========================================
   const rawRisks = (project.risksRegister || project.risks || []).filter(r => (r.desc && r.desc.trim().length > 0) || r.prob || r.impact);
   if (rawRisks.length > 0) {
-    drawSectionHeader(`${sectionCounter++}. Registre des Risques & Actions de Mitigation`, [185, 28, 28]);
-
-    // 5x5 Heatmap Graphic from Tool
     const heatmapImg = generateRiskMatrixCanvasDataUrl(rawRisks);
+    drawSectionHeader(`${sectionCounter++}. Registre des Risques & Actions de Mitigation`, [185, 28, 28], heatmapImg ? 80 : 25);
+
     if (heatmapImg) {
-      if (currentY + 115 > doc.internal.pageSize.getHeight() - 20) {
+      if (currentY + 74 > 275) {
         doc.addPage();
-        currentY = 22;
+        addPdfHeader(doc, project, 'Synthèse Exécutive (Suite)', 'p');
+        currentY = 35;
       }
-      doc.addImage(heatmapImg, 'PNG', 14, currentY, 182, 114);
-      currentY += 118;
+      doc.addImage(heatmapImg, 'PNG', 14, currentY, 182, 72);
+      currentY += 76;
     }
 
     const risksData = rawRisks.map(r => {
-      const prob = r.prob || 1;
-      const impact = r.impact || 1;
+      const prob = Number(r.prob || 1);
+      const impact = Number(r.impact || 1);
       const gravScore = prob * impact;
       const gravLabel = gravScore >= 15 ? 'Critique' : gravScore >= 10 ? 'Élevé' : gravScore >= 5 ? 'Moyen' : 'Faible';
       return [
         sanitizePdfText(r.desc) || 'Risque non specifie',
         `P:${prob} / I:${impact}`,
-        gravLabel,
+        `${gravScore} (${gravLabel})`,
         sanitizePdfText(r.mitigation) || 'Surveillance continue',
         r.owner ? sanitizePdfText(getMemberName(r.owner)) : 'Equipe'
       ];
     });
 
-    if (currentY + 35 > doc.internal.pageSize.getHeight() - 20) {
+    if (currentY + 20 > 275) {
       doc.addPage();
-      currentY = 22;
+      addPdfHeader(doc, project, 'Synthèse Exécutive (Suite)', 'p');
+      currentY = 35;
     }
 
     autoTable(doc, {
       startY: currentY,
-      head: [['Risque identifie', 'Prob. / Impact', 'Gravite', 'Plan de mitigation / Action', 'Pilote']],
+      head: [['Risque identifie', 'Prob. / Impact', 'Gravite (P x I)', 'Plan de mitigation / Action', 'Pilote']],
       body: risksData,
       headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
       alternateRowStyles: { fillColor: [254, 242, 242] },
@@ -2311,9 +2873,18 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
       columnStyles: {
         0: { cellWidth: 50, fontStyle: 'bold' },
         1: { cellWidth: 25, halign: 'center' },
-        2: { cellWidth: 20, halign: 'center' },
-        3: { cellWidth: 60 },
+        2: { cellWidth: 24, halign: 'center', fontStyle: 'bold' },
+        3: { cellWidth: 56 },
         4: { cellWidth: 27 }
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 2) {
+          const val = String(data.cell.raw || '');
+          if (val.includes('Critique')) data.cell.styles.textColor = [185, 28, 28];
+          else if (val.includes('Élevé') || val.includes('Eleve')) data.cell.styles.textColor = [217, 119, 6];
+          else if (val.includes('Moyen')) data.cell.styles.textColor = [161, 98, 7];
+          else data.cell.styles.textColor = [22, 101, 52];
+        }
       },
       margin: { left: 14, right: 14 }
     });
@@ -2325,7 +2896,20 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
   // ==========================================
   const wbsPhases = (project.ganttPhases || []).filter(p => (p.items && p.items.length > 0) || (p.name && p.name.trim().length > 0));
   if (wbsPhases.length > 0) {
-    drawSectionHeader(`${sectionCounter++}. Organigramme des Taches (WBS)`);
+    const wbsDiagramImg = generateWbsTreeCanvasDataUrl(project);
+    drawSectionHeader(`${sectionCounter++}. Organigramme des Taches (WBS)`, [30, 41, 59], 25);
+
+    // Visual WBS Diagram snapshot
+    if (wbsDiagramImg) {
+      if (currentY + 76 > 275) {
+        doc.addPage();
+        addPdfHeader(doc, project, 'Synthèse Exécutive (Suite)', 'p');
+        currentY = 35;
+      }
+      doc.addImage(wbsDiagramImg, 'PNG', 14, currentY, contentWidth, 72);
+      currentY += 76;
+    }
+
     const wbsRows: any[] = [];
     wbsPhases.forEach((phase, pIdx) => {
       const phaseCode = `${pIdx + 1}.0`;
@@ -2761,27 +3345,47 @@ export function exportExecutiveSummaryPDF(project: Project, globalTeam: TeamMemb
   // ==========================================
   const kpis = (project.kpis || []).filter(k => (k.name && k.name.trim().length > 0) || k.targetValue);
   if (kpis.length > 0) {
-    drawSectionHeader(`${sectionCounter++}. Indicateurs Cles de Performance (KPIs)`);
-    const kpiRows = kpis.map(k => {
-      const scoreVal = k.status ?? (k.statusScore === 'ok' ? 100 : k.statusScore === 'warning' ? 50 : 25);
-      const scoreBadge = scoreVal >= 80 ? 'Conforme (Vert)' : scoreVal >= 50 ? 'Vigilance (Orange)' : 'Alerte (Rouge)';
+    drawSectionHeader(`${sectionCounter++}. Indicateurs Clés de Performance (KPIs)`, [30, 41, 59], 30);
+    const kpiRows = kpis.map((k, idx) => {
+      const scoreVal = computeKpiProgress(k);
+      const badgeInfo = getKpiStatusBadge(scoreVal, k.statusScore);
+      const targetStr = formatKpiDisplay(k.targetValue, k.unit, k.metricType);
+      const currentStr = formatKpiDisplay(k.currentValue, k.unit, k.metricType);
+
       return [
-        sanitizePdfText(k.name),
+        `KPI-${idx + 1}`,
+        sanitizePdfText(k.name) + (k.category ? `\n[${sanitizePdfText(k.category)}]` : ''),
         k.metricType || 'Nombre',
-        k.targetValue || '-',
-        k.currentValue || '-',
-        `${scoreVal}%`,
-        scoreBadge
+        targetStr,
+        currentStr,
+        `${scoreVal} %`,
+        badgeInfo.label
       ];
     });
 
     autoTable(doc, {
       startY: currentY,
-      head: [['Indicateur (KPI)', 'Type', 'Cible', 'Valeur Actuelle', 'Atteinte', 'Statut']],
+      head: [['ID', 'Indicateur (KPI)', 'Type', 'Cible', 'Valeur Actuelle', 'Atteinte', 'Statut']],
       body: kpiRows,
       headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
       styles: { fontSize: 7.5, cellPadding: 2.5 },
-      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 50 }, 4: { halign: 'center' }, 5: { halign: 'center', fontStyle: 'bold' } },
+      columnStyles: {
+        0: { cellWidth: 14, fontStyle: 'bold', halign: 'center' },
+        1: { fontStyle: 'bold', cellWidth: 48 },
+        2: { cellWidth: 22 },
+        3: { cellWidth: 26, halign: 'center' },
+        4: { cellWidth: 26, halign: 'center' },
+        5: { halign: 'center', fontStyle: 'bold', cellWidth: 22 },
+        6: { halign: 'center', fontStyle: 'bold', cellWidth: 24 }
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 6) {
+          const val = String(data.cell.raw || '');
+          if (val.includes('Alerte')) data.cell.styles.textColor = [220, 38, 38];
+          else if (val.includes('Vigilance')) data.cell.styles.textColor = [217, 119, 6];
+          else data.cell.styles.textColor = [22, 101, 52];
+        }
+      },
       margin: { left: 14, right: 14 }
     });
     currentY = (doc as any).lastAutoTable.finalY + 6;
@@ -3016,8 +3620,8 @@ export function exportPortfolioSupervisionPDF(
     }
   };
 
-  const drawSectionHeader = (title: string, badge?: string) => {
-    checkPageBreak(14);
+  const drawSectionHeader = (title: string, badge?: string, minSpaceNeeded: number = 25) => {
+    checkPageBreak(minSpaceNeeded);
     doc.setFillColor(241, 245, 249); // Slate 100
     doc.roundedRect(14, currentY, contentWidth, 7, 1.5, 1.5, 'F');
     doc.setFontSize(8.5);
@@ -3424,12 +4028,12 @@ export function exportPortfolioSupervisionPDF(
   }
 
   // Section 5: Registre des Risques Majeurs & Points Critiques
-  drawSectionHeader('5. Cartographie des Risques Majeurs & Points de Blocage', 'Gouvernance & Alertes');
-
   type ConsolidatedRisk = {
     projectName: string;
     desc: string;
     score: number;
+    prob: number;
+    impact: number;
     mitigation: string;
     owner?: string;
   };
@@ -3438,11 +4042,15 @@ export function exportPortfolioSupervisionPDF(
   projects.forEach((p) => {
     const list = p.risksRegister || p.risks || [];
     list.forEach((r) => {
-      const score = (r.prob || 1) * (r.impact || 1);
+      const prob = Number(r.prob || 1);
+      const impact = Number(r.impact || 1);
+      const score = prob * impact;
       consolidatedRisks.push({
         projectName: p.name,
         desc: r.desc || 'Risque non documenté',
         score,
+        prob,
+        impact,
         mitigation: r.mitigation || 'Mesures en attente d’arbitrage',
         owner: r.owner || p.manager || 'Équipe'
       });
@@ -3451,15 +4059,37 @@ export function exportPortfolioSupervisionPDF(
 
   consolidatedRisks.sort((a, b) => b.score - a.score);
 
-  const riskRows = consolidatedRisks.slice(0, 10).map((r) => {
+  const portfolioHeatmapImg =
+    consolidatedRisks.length > 0
+      ? generateRiskMatrixCanvasDataUrl(consolidatedRisks)
+      : null;
+
+  drawSectionHeader(
+    '5. Cartographie des Risques Majeurs & Points de Blocage',
+    'Gouvernance & Alertes',
+    portfolioHeatmapImg ? 80 : 25
+  );
+
+  if (portfolioHeatmapImg) {
+    if (currentY + 74 > pageHeight - 16) {
+      doc.addPage();
+      addPortfolioHeader('Rapport de Supervision Consolidé');
+      currentY = 34;
+    }
+    doc.addImage(portfolioHeatmapImg, 'PNG', 14, currentY, contentWidth, 72);
+    currentY += 76;
+  }
+
+  const riskRows = consolidatedRisks.slice(0, 15).map((r) => {
     let criticite = 'Faible';
     if (r.score >= 15) criticite = 'Critique (Rouge)';
-    else if (r.score >= 9) criticite = 'Majeur (Orange)';
-    else if (r.score >= 4) criticite = 'Modéré (Jaune)';
+    else if (r.score >= 10) criticite = 'Élevé (Orange)';
+    else if (r.score >= 5) criticite = 'Moyen (Jaune)';
 
     return [
       sanitizePdfText(r.projectName),
       sanitizePdfText(r.desc),
+      `P:${r.prob} / I:${r.impact}`,
       `Score ${r.score} (${criticite})`,
       sanitizePdfText(r.mitigation),
       sanitizePdfText(r.owner || 'N/A')
@@ -3467,9 +4097,15 @@ export function exportPortfolioSupervisionPDF(
   });
 
   if (riskRows.length > 0) {
+    if (currentY + 20 > pageHeight - 16) {
+      doc.addPage();
+      addPortfolioHeader('Rapport de Supervision Consolidé');
+      currentY = 34;
+    }
+
     autoTable(doc, {
       startY: currentY,
-      head: [['Projet', 'Description du Risque / Menace', 'Criticité (P x I)', 'Plan de Prévention & Mitigation', 'Pilote']],
+      head: [['Projet', 'Description du Risque / Menace', 'Prob. / Impact', 'Criticité (P x I)', 'Plan de Prévention & Mitigation', 'Pilote']],
       body: riskRows,
       headStyles: {
         fillColor: [180, 83, 9],
@@ -3484,11 +4120,21 @@ export function exportPortfolioSupervisionPDF(
         lineWidth: 0.2
       },
       columnStyles: {
-        0: { fontStyle: 'bold', cellWidth: 38 },
-        1: { cellWidth: 50 },
-        2: { halign: 'center', cellWidth: 28, fontStyle: 'bold' },
-        3: { cellWidth: 44 },
-        4: { cellWidth: 22 }
+        0: { fontStyle: 'bold', cellWidth: 32 },
+        1: { cellWidth: 44 },
+        2: { halign: 'center', cellWidth: 20 },
+        3: { halign: 'center', cellWidth: 26, fontStyle: 'bold' },
+        4: { cellWidth: 38 },
+        5: { cellWidth: 22 }
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 3) {
+          const val = String(data.cell.raw || '');
+          if (val.includes('Critique')) data.cell.styles.textColor = [185, 28, 28];
+          else if (val.includes('Élevé') || val.includes('Eleve')) data.cell.styles.textColor = [217, 119, 6];
+          else if (val.includes('Moyen')) data.cell.styles.textColor = [161, 98, 7];
+          else data.cell.styles.textColor = [22, 101, 52];
+        }
       },
       margin: { left: 14, right: 14 }
     });
@@ -3502,11 +4148,16 @@ export function exportPortfolioSupervisionPDF(
   }
 
   // Section 6: Indicateurs de Performance (KPIs) Consolidés
-  drawSectionHeader('6. Performance Qualité & Scorecard KPIs du Portefeuille', 'Pilotage');
+  drawSectionHeader(
+    '6. Performance Qualité & Scorecard KPIs du Portefeuille',
+    'Pilotage',
+    35
+  );
 
   type ConsolidatedKpi = {
     projectName: string;
     kpiName: string;
+    category?: string;
     target: string;
     current: string;
     scoreVal: number;
@@ -3516,25 +4167,26 @@ export function exportPortfolioSupervisionPDF(
   const consolidatedKpis: ConsolidatedKpi[] = [];
   projects.forEach((p) => {
     (p.kpis || []).forEach((k) => {
-      const scoreVal = k.status ?? (k.statusScore === 'ok' ? 100 : k.statusScore === 'warning' ? 50 : 25);
-      const statusBadge = scoreVal >= 80 ? 'Conforme' : scoreVal >= 50 ? 'Vigilance' : 'Alerte';
+      const scoreVal = computeKpiProgress(k);
+      const badgeInfo = getKpiStatusBadge(scoreVal, k.statusScore);
       consolidatedKpis.push({
         projectName: p.name,
         kpiName: k.name,
-        target: k.targetValue || '-',
-        current: k.currentValue || '-',
+        category: k.category,
+        target: formatKpiDisplay(k.targetValue, k.unit, k.metricType),
+        current: formatKpiDisplay(k.currentValue, k.unit, k.metricType),
         scoreVal,
-        statusBadge
+        statusBadge: badgeInfo.label
       });
     });
   });
 
-  const kpiRows = consolidatedKpis.slice(0, 12).map((k) => [
+  const kpiRows = consolidatedKpis.map((k) => [
     sanitizePdfText(k.projectName),
-    sanitizePdfText(k.kpiName),
-    sanitizePdfText(k.target),
-    sanitizePdfText(k.current),
-    `${k.scoreVal}%`,
+    sanitizePdfText(k.kpiName) + (k.category ? `\n[${sanitizePdfText(k.category)}]` : ''),
+    k.target,
+    k.current,
+    `${k.scoreVal} %`,
     k.statusBadge
   ]);
 
@@ -3556,7 +4208,7 @@ export function exportPortfolioSupervisionPDF(
         lineWidth: 0.2
       },
       columnStyles: {
-        0: { fontStyle: 'bold', cellWidth: 40 },
+        0: { fontStyle: 'bold', cellWidth: 38 },
         1: { cellWidth: 46 },
         2: { halign: 'center', cellWidth: 26 },
         3: { halign: 'center', cellWidth: 26 },
@@ -3574,6 +4226,12 @@ export function exportPortfolioSupervisionPDF(
       margin: { left: 14, right: 14 }
     });
     currentY = (doc as any).lastAutoTable.finalY + 7;
+  } else {
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(148, 163, 184);
+    doc.text('Aucun indicateur KPI configuré sur les projets du portefeuille.', 18, currentY);
+    currentY += 7;
   }
 
   addPortfolioFooter();

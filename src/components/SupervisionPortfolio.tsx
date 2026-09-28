@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Project, TeamMember } from '../types';
-import { exportPortfolioSupervisionPDF } from '../utils/pdfExport';
+import { exportPortfolioSupervisionPDF, formatKpiDisplay, computeKpiProgress } from '../utils/pdfExport';
 import MasterGanttVisualizer from './MasterGanttVisualizer';
 import RexQrCodeModal from './RexQrCodeModal';
 import {
@@ -324,15 +324,16 @@ export default function SupervisionPortfolio({
     const list: KpiItem[] = [];
     projects.forEach((p) => {
       (p.kpis || []).forEach((k) => {
-        const scoreVal = k.status ?? (k.statusScore === 'ok' ? 100 : k.statusScore === 'warning' ? 50 : 25);
-        const statusBadge: 'ok' | 'warning' | 'alert' = scoreVal >= 80 ? 'ok' : scoreVal >= 50 ? 'warning' : 'alert';
+        const scoreVal = computeKpiProgress(k);
+        const statusBadge: 'ok' | 'warning' | 'alert' =
+          k.statusScore || (scoreVal >= 80 ? 'ok' : scoreVal >= 50 ? 'warning' : 'alert');
         list.push({
           projectId: p.id,
           projectName: p.name,
           kpiName: k.name,
           metricType: k.metricType,
-          target: k.targetValue || '-',
-          current: k.currentValue || '-',
+          target: formatKpiDisplay(k.targetValue, k.unit, k.metricType),
+          current: formatKpiDisplay(k.currentValue, k.unit, k.metricType),
           scoreVal,
           statusBadge,
           project: p
