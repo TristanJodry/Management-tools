@@ -1,42 +1,27 @@
-# ==============================================================================
-# DOCKER-COMPOSE - TIME'EATS GESTION DE PROJET & GOUVERNANCE SPP
-# ==============================================================================
-# Lancement rapide :
-#   docker compose up -d --build
-#
-# Arrêt :
-#   docker compose down
-#
-# Consultation des logs :
-#   docker compose logs -f
-# ==============================================================================
-
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: timeeats-gestion-projet
+
+    image: management-tools:latest
+    container_name: management-tools
     restart: unless-stopped
+
     ports:
-      # Port hôte : Port conteneur (exposé sur le port 3001 de votre machine hôte)
-      - "${APP_PORT:-3001}:3000"
+      - "3001:3000"
+
     environment:
-      - NODE_ENV=production
-      - PORT=3000
+      NODE_ENV: production
+      PORT: "3000"
+
     volumes:
-      # Persistance de la base de données SQLite (projets, équipes, utilisateurs, référentiel)
-      - ./data:/app/data
-      # Dossier dédié aux sauvegardes de la base
-      - ./backups:/app/backups
+      - /mnt/docker-data/appdata/management-tools/data:/app/data
+      - /mnt/docker-data/appdata/management-tools/backups:/app/backups
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 15s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
