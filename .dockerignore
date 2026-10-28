@@ -1,0 +1,38 @@
+# Dépendances et caches
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Fichiers de compilation
+dist
+dist-ssr
+*.local
+
+# Environnement et secrets
+.env
+.env.local
+.env.*.local
+
+# Données locales et journaux
+data/*.sqlite-journal
+data/*.sqlite-wal
+data/*.sqlite-shm
+backups/*
+
+# Outils de versioning et IDE
+.git
+.github
+.gitignore
+.dockerignore
+.vscode
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Documentation temporaire
+*.tmp
