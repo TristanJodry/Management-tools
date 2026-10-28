@@ -2,9 +2,13 @@
 # DOCKERFILE - TIME'EATS GESTION DE PROJET & GOUVERNANCE SPP
 # Multi-stage build léger et sécurisé (Alpine Linux + Node.js 20 LTS)
 # ==============================================================================
+# Usage autonome (sans Docker Compose) :
+#   docker build -t timeeats-gestion-projet .
+#   docker run -d -p 3001:3000 -v $(pwd)/data:/app/data --name timeeats timeeats-gestion-projet
+# ==============================================================================
 
 # ------------------------------------------------------------------------------
-# Étape 1 : Construction des bundles Vite & esbuild
+# Étape 1 : Construction de l'application (Builder)
 # ------------------------------------------------------------------------------
 FROM node:20-alpine AS builder
 
@@ -14,7 +18,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Installation des dépendances complètes (devDependencies nécessaires pour Vite et esbuild)
-RUN npm ci
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # Copie du code source complet
 COPY . .
@@ -23,7 +27,7 @@ COPY . .
 RUN npm run build
 
 # ------------------------------------------------------------------------------
-# Étape 2 : Image d'exécution minimale pour la production
+# Étape 2 : Image d'exécution minimale pour la production (Runner)
 # ------------------------------------------------------------------------------
 FROM node:20-alpine AS runner
 
@@ -33,32 +37,36 @@ WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000
 
-# Installation de curl pour le test de santé (healthcheck)
+# Outils système essentiels (curl pour healthcheck)
 RUN apk add --no-cache curl
 
-# Copie des manifestes et installation stricte des dépendances de production
+# Copie des manifests et installation stricte des modules de production
 COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+RUN if [ -f package-lock.json ]; then \
+      npm ci --omit=dev --ignore-scripts && npm cache clean --force; \
+    else \
+      npm install --omit=dev --ignore-scripts --no-audit --no-fund && npm cache clean --force; \
+    fi
 
-# Copie des fichiers générés lors du build
+# Copie des livrables compilés depuis l'étape builder
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/scripts ./scripts
 
-# Création des répertoires de données persistantes avec permissions utilisateur non-root
+# Préparation des dossiers de données persistantes (SQLite et sauvegardes) avec permissions node
 RUN mkdir -p /app/data /app/backups && \
     chown -R node:node /app
 
-# Sécurité : Exécution sous l'utilisateur non-root standard 'node'
+# Sécurité : exécution sous le compte utilisateur non-root standard 'node'
 USER node
 
-# Volumes de persistance (Base SQLite et sauvegardes)
+# Déclaration des volumes pour la persistance des données
 VOLUME ["/app/data", "/app/backups"]
 
-# Port exposé
+# Port exposé à l'intérieur du conteneur
 EXPOSE 3000
 
 # Sonde de disponibilité (Healthcheck)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD curl -f http://localhost:3000/api/health || exit 1
 
 # Commande de démarrage
